@@ -2,8 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:convex_bottom_bar/convex_bottom_bar.dart';
 import 'package:nhom_3_damh_lttbdd/screens/profileScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/exploreScreen.dart';
+
 class HomePage extends StatefulWidget {
-  const HomePage({Key? key}) : super(key: key);
+  // 1. Dòng này của bạn đã đúng
+  final String userId;
+
+  // 2. SỬA LẠI CONSTRUCTOR ĐỂ NHẬN userId
+  const HomePage({
+    Key? key,
+    required this.userId, // Thêm 'required this.userId' vào đây
+  }) : super(key: key);
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -17,19 +25,22 @@ class _HomePageState extends State<HomePage> {
       "name": "Vịnh Hạ Long",
       "location": "Quảng Ninh, Việt Nam",
       "rating": 4.8,
-      "image": "https://photo.znews.vn/w1920/Uploaded/mdf_eioxrd/2021_07_06/2.jpg",
+      "image":
+          "https://photo.znews.vn/w1920/Uploaded/mdf_eioxrd/2021_07_06/2.jpg",
     },
     {
       "name": "Phú Quốc Island",
       "location": "Kiên Giang, Việt Nam",
       "rating": 4.6,
-      "image": "https://photo.znews.vn/w1920/Uploaded/mdf_eioxrd/2021_07_06/2.jpg",
+      "image":
+          "https://photo.znews.vn/w1920/Uploaded/mdf_eioxrd/2021_07_06/2.jpg",
     },
     {
       "name": "Đà Lạt City",
       "location": "Lâm Đồng, Việt Nam",
       "rating": 4.7,
-      "image": "https://photo.znews.vn/w1920/Uploaded/mdf_eioxrd/2021_07_06/2.jpg",
+      "image":
+          "https://photo.znews.vn/w1920/Uploaded/mdf_eioxrd/2021_07_06/2.jpg",
     },
   ];
 
@@ -44,8 +55,10 @@ class _HomePageState extends State<HomePage> {
               prefixIcon: const Icon(Icons.search),
               filled: true,
               fillColor: Colors.white,
-              contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(20),
                 borderSide: BorderSide.none,
@@ -130,13 +143,17 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildExploreContent() => const Center(
-    child: Text('Trang Khám phá',
-        style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
+    child: Text(
+      'Trang Khám phá',
+      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+    ),
   );
 
   Widget _buildBookingContent() => const Center(
-    child: Text('Đặt chỗ của tôi',
-        style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
+    child: Text(
+      'Đặt chỗ của tôi',
+      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+    ),
   );
 
   Widget _buildSavedContent() => const Center(
@@ -145,12 +162,13 @@ class _HomePageState extends State<HomePage> {
       children: [
         Icon(Icons.bookmark_outline, size: 80, color: Colors.grey),
         SizedBox(height: 16),
-        Text('Đã lưu',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
+        Text(
+          'Đã lưu',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+        ),
       ],
     ),
   );
-
 
   Widget _getSelectedContent() {
     switch (_selectedIndex) {
@@ -163,7 +181,7 @@ class _HomePageState extends State<HomePage> {
       case 3:
         return _buildSavedContent();
       case 4:
-        return ProfileScreen();
+        return ProfileScreen(userId: widget.userId);
       default:
         return _buildHomeContent();
     }
@@ -200,10 +218,15 @@ class _HomePageState extends State<HomePage> {
         child: AppBar(
           title: Text(
             _getAppBarTitle(),
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18), // Có thể giảm cỡ chữ nếu cần
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ), // Có thể giảm cỡ chữ nếu cần
           ),
           centerTitle: true,
-          backgroundColor: _selectedIndex == 2 ? Colors.orange[600] : Colors.teal,
+          backgroundColor: _selectedIndex == 2
+              ? Colors.orange[600]
+              : Colors.teal,
         ),
       ),
       body: _getSelectedContent(),

@@ -6,17 +6,16 @@ import 'package:nhom_3_damh_lttbdd/screens/loginScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart'; // file này tự động sinh ra khi bạn chạy flutterfire configure
+
 Future<void> main() async {
   // Khởi tạo Flutter & Firebase
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   runApp(const MyApp());
 }
+
 class MyApp extends StatelessWidget {
-  
   const MyApp({super.key});
 
   @override
@@ -36,7 +35,6 @@ class MyApp extends StatelessWidget {
       routes: {
         '/': (context) => const SplashScreen(),
         '/welcome': (context) => const WelcomeScreen(),
-        '/home': (context) => HomePage(),
       },
     );
   }
