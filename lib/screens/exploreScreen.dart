@@ -3,15 +3,22 @@ import 'package:intl/intl.dart';
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart'; // Sửa lại đường dẫn file model của bạn
 import 'package:nhom_3_damh_lttbdd/screens/personalProfileScreen.dart';
 
-
 class ExploreScreen extends StatefulWidget {
-  const ExploreScreen({Key? key}) : super(key: key);
+  // 1. Dòng này của bạn đã đúng
+  final String userId;
+
+  // 2. SỬA LẠI CONSTRUCTOR ĐỂ NHẬN userId
+  const ExploreScreen({
+    Key? key,
+    required this.userId, // Thêm 'required this.userId' vào đây
+  }) : super(key: key);
 
   @override
   _ExploreScreenState createState() => _ExploreScreenState();
 }
 
-class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProviderStateMixin {
+class _ExploreScreenState extends State<ExploreScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   List<Post> _posts = [];
   bool _isLoading = true;
@@ -48,10 +55,7 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
       body: Column(
         children: [
           // 1. Header tùy chỉnh (nội dung AppBar cũ)
-          SafeArea(
-            bottom: false,
-            child: _buildCustomHeader(),
-          ),
+          SafeArea(bottom: false, child: _buildCustomHeader()),
 
           // 👇 2. KHOẢNG TRỐNG (SIZEBOX) BẠN MUỐN
           const SizedBox(height: 10),
@@ -59,14 +63,13 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
           // 3. Nội dung chính (phải bọc trong Expanded)
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+                ? const Center(
+                    child: CircularProgressIndicator(color: Colors.orange),
+                  )
                 : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildPostListView(),
-                _buildPostListView(),
-              ],
-            ),
+                    controller: _tabController,
+                    children: [_buildPostListView(), _buildPostListView()],
+                  ),
           ),
         ],
       ),
@@ -84,7 +87,7 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
       mainAxisSize: MainAxisSize.min,
       children: [
         // Phần Title và
-        SizedBox(height: 5,),
+        SizedBox(height: 5),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0),
           child: Row(
@@ -93,13 +96,20 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                 onTap: () {
                   // TODO: Thêm logic điều hướng đến trang cá nhân ở đây
                   Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => PersonalProfileScreen()));
-
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          PersonalProfileScreen(userId: widget.userId),
+                    ),
+                  );
                 },
-                borderRadius: BorderRadius.circular(30), // Giúp hiệu ứng gợn sóng đẹp hơn
+                borderRadius: BorderRadius.circular(
+                  30,
+                ), // Giúp hiệu ứng gợn sóng đẹp hơn
                 child: Padding(
-                  padding: const EdgeInsets.all(8.0), // Thêm padding để vùng bấm lớn hơn một chút
+                  padding: const EdgeInsets.all(
+                    8.0,
+                  ), // Thêm padding để vùng bấm lớn hơn một chút
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -110,7 +120,11 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                       const SizedBox(width: 12),
                       const Text(
                         "Mydei",
-                        style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
                       ),
                     ],
                   ),
@@ -118,7 +132,11 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
               ),
               const Spacer(),
               IconButton(
-                icon: Icon(Icons.notifications_none, color: Colors.grey[800], size: 28),
+                icon: Icon(
+                  Icons.notifications_none,
+                  color: Colors.grey[800],
+                  size: 28,
+                ),
                 onPressed: () {},
               ),
             ],
@@ -144,7 +162,10 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
         // Phần TabBar
         TabBar(
           controller: _tabController,
-          tabs: const [Tab(text: "Đang theo dõi"), Tab(text: "Dành cho bạn")],
+          tabs: const [
+            Tab(text: "Đang theo dõi"),
+            Tab(text: "Dành cho bạn"),
+          ],
           labelColor: Colors.orange,
           unselectedLabelColor: Colors.grey,
           indicatorColor: Colors.orange,
@@ -190,8 +211,14 @@ class PostCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(post.author.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text(post.timeAgo, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                  Text(
+                    post.author.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    post.timeAgo,
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  ),
                 ],
               ),
               const Spacer(),
@@ -199,7 +226,10 @@ class PostCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(post.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(
+            post.title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 4),
           Text(post.content, style: TextStyle(color: Colors.grey[700])),
           const SizedBox(height: 12),
@@ -210,24 +240,34 @@ class PostCard extends StatelessWidget {
           const SizedBox(height: 12),
           Wrap(
             spacing: 8.0,
-            children: post.tags.map((tag) => Chip(
-              label: Text(tag, style: const TextStyle(fontSize: 12)),
-              backgroundColor: Colors.grey[200],
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            )).toList(),
+            children: post.tags
+                .map(
+                  (tag) => Chip(
+                    label: Text(tag, style: const TextStyle(fontSize: 12)),
+                    backgroundColor: Colors.grey[200],
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                )
+                .toList(),
           ),
           const Divider(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildActionButton(Icons.favorite_border, numberFormat.format(post.likeCount)),
-              _buildActionButton(Icons.chat_bubble_outline, post.commentCount.toString()),
+              _buildActionButton(
+                Icons.favorite_border,
+                numberFormat.format(post.likeCount),
+              ),
+              _buildActionButton(
+                Icons.chat_bubble_outline,
+                post.commentCount.toString(),
+              ),
               _buildActionButton(Icons.share_outlined, null),
               _buildActionButton(Icons.card_giftcard_outlined, null),
               _buildActionButton(Icons.bookmark_border, null),
             ],
-          )
+          ),
         ],
       ),
     );
