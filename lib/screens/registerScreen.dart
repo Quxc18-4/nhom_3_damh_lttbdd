@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nhom_3_damh_lttbdd/screens/loginScreen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
@@ -12,9 +14,97 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+
+  // Dán hàm này vào trong class _RegisterScreenState
+  Future<void> _registerUser() async {
+    // Lấy dữ liệu từ các controller
+    final String name = _nameController.text.trim();
+    final String email = _emailController.text.trim();
+    final String password = _passwordController.text.trim();
+    final String confirmPassword = _confirmPasswordController.text.trim();
+
+    // 1. Kiểm tra đầu vào
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng điền đầy đủ thông tin.')),
+      );
+      return;
+    }
+
+    if (password != confirmPassword) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mật khẩu xác nhận không khớp.')),
+      );
+      return;
+    }
+
+    // Hiển thị vòng xoay loading (tùy chọn)
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // 2. Tạo người dùng mới với Firebase Authentication
+      UserCredential userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
+
+      User? newUser = userCredential.user;
+
+      if (newUser != null) {
+        // 3. Lưu thông tin người dùng lên Cloud Firestore
+        // Đây là bước quan trọng, tuân thủ cấu trúc đã thống nhất
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(newUser.uid)
+            .set({
+              'name': name,
+              'email': email,
+              'password': null, // Không bao giờ lưu password ở dạng thô
+              'avatarUrl': '', // URL avatar mặc định
+              'bio': '', // Bio mặc định
+              'authProviders': [
+                'password',
+              ], // Nhà cung cấp xác thực là 'password'
+              'joinedAt':
+                  FieldValue.serverTimestamp(), // Lấy thời gian từ server
+              'followersCount': 0,
+              'followingCount': 0,
+              'userRank': 'Bronze',
+            });
+
+        // 4. Xử lý sau khi thành công
+        Navigator.of(context).pop(); // Tắt vòng xoay loading
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đăng ký thành công!')));
+        // Chuyển hướng đến màn hình đăng nhập hoặc trang chủ
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      Navigator.of(context).pop(); // Tắt vòng xoay loading
+      // 5. Xử lý lỗi
+      String message = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
+      if (e.code == 'weak-password') {
+        message = 'Mật khẩu quá yếu.';
+      } else if (e.code == 'email-already-in-use') {
+        message = 'Email này đã được sử dụng.';
+      } else if (e.code == 'invalid-email') {
+        message = 'Email không hợp lệ.';
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
 
   @override
   void dispose() {
@@ -86,8 +176,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     controller: _nameController,
                     decoration: InputDecoration(
                       hintText: 'Tên của bạn...',
-                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                      prefixIcon: Icon(Icons.person_outline, color: Colors.grey[600]),
+                      hintStyle: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 14,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.person_outline,
+                        color: Colors.grey[600],
+                      ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 20,
@@ -122,8 +218,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     controller: _emailController,
                     decoration: InputDecoration(
                       hintText: 'Email hoặc số điện thoại của bạn...',
-                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                      prefixIcon: Icon(Icons.email_outlined, color: Colors.grey[600]),
+                      hintStyle: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 14,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.email_outlined,
+                        color: Colors.grey[600],
+                      ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 20,
@@ -159,11 +261,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
                       hintText: 'Nhập mật khẩu...',
-                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                      prefixIcon: Icon(Icons.lock_outline, color: Colors.grey[600]),
+                      hintStyle: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 14,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.lock_outline,
+                        color: Colors.grey[600],
+                      ),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
                           color: Colors.grey[400],
                         ),
                         onPressed: () {
@@ -207,11 +317,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     obscureText: _obscureConfirmPassword,
                     decoration: InputDecoration(
                       hintText: 'Nhập mật khẩu...',
-                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                      prefixIcon: Icon(Icons.lock_outline, color: Colors.grey[600]),
+                      hintStyle: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 14,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.lock_outline,
+                        color: Colors.grey[600],
+                      ),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                          _obscureConfirmPassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
                           color: Colors.grey[400],
                         ),
                         onPressed: () {
@@ -234,7 +352,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 // Register Button
                 ElevatedButton(
                   onPressed: () {
-                    // Handle register
+                    _registerUser();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange[400],
@@ -312,7 +430,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         // Handle navigate to login
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const LoginScreen())
+                          MaterialPageRoute(
+                            builder: (context) => const LoginScreen(),
+                          ),
                         );
                       },
                       style: TextButton.styleFrom(
@@ -342,7 +462,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     text: TextSpan(
                       style: const TextStyle(fontSize: 12, color: Colors.grey),
                       children: [
-                        const TextSpan(text: 'Khi nhập vào Đăng ký, bạn đã xác nhận đồng ý với '),
+                        const TextSpan(
+                          text:
+                              'Khi nhập vào Đăng ký, bạn đã xác nhận đồng ý với ',
+                        ),
                         TextSpan(
                           text: 'Điều khoản dịch vụ',
                           style: TextStyle(
@@ -385,10 +508,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         height: 50,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(50),
-          child: Image.asset(
-            imagePath,
-            fit: BoxFit.contain,
-          ),
+          child: Image.asset(imagePath, fit: BoxFit.contain),
         ),
       ),
     );

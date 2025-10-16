@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 // Đảm bảo các import này là chính xác
 import 'package:nhom_3_damh_lttbdd/screens/homePage.dart';
 import 'package:nhom_3_damh_lttbdd/screens/registerScreen.dart';
@@ -17,6 +18,66 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _rememberMe = false;
   bool _obscurePassword = true;
+  // Dán hàm này vào trong class _LoginScreenState
+  Future<void> _loginUser() async {
+    final String email = _emailController.text.trim();
+    final String password = _passwordController.text.trim();
+
+    // 1. Kiểm tra đầu vào
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập email và mật khẩu.')),
+      );
+      return;
+    }
+
+    // Hiển thị vòng xoay loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // 2. Gọi Firebase để đăng nhập
+      final UserCredential userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
+
+      final User? user = userCredential.user;
+
+      if (user != null) {
+        // Tắt vòng xoay loading
+        Navigator.of(context).pop();
+
+        // 3. Đăng nhập thành công, lấy userID và chuyển hướng
+        // Dùng pushAndRemoveUntil để xóa hết các màn hình cũ
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            // Truyền userId qua HomePage
+            builder: (context) => HomePage(userId: user.uid),
+          ),
+          (Route<dynamic> route) => false,
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      // Tắt vòng xoay loading
+      Navigator.of(context).pop();
+
+      // 4. Xử lý các lỗi đăng nhập cụ thể
+      String message = 'Đã có lỗi xảy ra.';
+      if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+        message = 'Email hoặc mật khẩu không chính xác.';
+      } else if (e.code == 'wrong-password') {
+        message = 'Email hoặc mật khẩu không chính xác.';
+      } else if (e.code == 'invalid-email') {
+        message = 'Định dạng email không hợp lệ.';
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
 
   @override
   void dispose() {
@@ -38,10 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
         height: 50,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(50),
-          child: Image.asset(
-            imagePath,
-            fit: BoxFit.contain,
-          ),
+          child: Image.asset(imagePath, fit: BoxFit.contain),
         ),
       ),
     );
@@ -51,9 +109,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        backgroundColor: Colors.grey[100],
-      ),
+      appBar: AppBar(backgroundColor: Colors.grey[100]),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
@@ -109,12 +165,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: InputDecoration(
                       hintText: 'Email hoặc số điện thoại của bạn',
                       hintStyle: TextStyle(
-                          color: Colors.grey[400], fontSize: 14),
+                        color: Colors.grey[400],
+                        fontSize: 14,
+                      ),
                       prefixIcon: Icon(
-                          Icons.email_outlined, color: Colors.grey[600]),
+                        Icons.email_outlined,
+                        color: Colors.grey[600],
+                      ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 16),
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
                     ),
                   ),
                 ),
@@ -143,13 +205,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: InputDecoration(
                       hintText: 'Nhập mật khẩu của bạn',
                       hintStyle: TextStyle(
-                          color: Colors.grey[400], fontSize: 14),
+                        color: Colors.grey[400],
+                        fontSize: 14,
+                      ),
                       prefixIcon: Icon(
-                          Icons.lock_outline, color: Colors.grey[600]),
+                        Icons.lock_outline,
+                        color: Colors.grey[600],
+                      ),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscurePassword ? Icons.visibility_off : Icons
-                              .visibility,
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
                           color: Colors.grey[400],
                         ),
                         onPressed: () {
@@ -160,7 +227,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 16),
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
                     ),
                   ),
                 ),
@@ -169,18 +238,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 /// Login Button (Đã thêm logic chuyển hướng)
                 ElevatedButton(
-                  onPressed: () {
-                    // Logic xử lý Đăng nhập:
-                    // 1. Kiểm tra Email/Pass hợp lệ
-                    // 2. Gọi API đăng nhập
-
-                    // Chuyển hướng đến HomePage sau khi đăng nhập thành công
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(builder: (context) => const HomePage()),
-                          (Route<dynamic> route) => false, // Xóa hết stack, không cho quay lại Login
-                    );
-                  },
+                  onPressed: _loginUser,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange[400],
                     foregroundColor: Colors.white,
@@ -196,7 +254,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       Text(
                         'Đăng nhập',
                         style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       SizedBox(width: 8),
                       Icon(Icons.arrow_forward, size: 20),
@@ -235,8 +295,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextButton(
                       onPressed: () {
                         Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const ForgotPasswordScreen())
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ForgotPasswordScreen(),
+                          ),
                         );
                       },
                       style: TextButton.styleFrom(
@@ -273,12 +335,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         // Handle Google login
                       },
                     ),
-                    const SizedBox(width: 16,),
+                    const SizedBox(width: 16),
                     _buildSocialButton(
-                        imagePath: 'assets/images/apple.png',
-                        onTap: (){
-
-                        }
+                      imagePath: 'assets/images/apple.png',
+                      onTap: () {},
                     ),
                     const SizedBox(width: 16),
                     _buildSocialButton(
@@ -295,13 +355,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('Bạn chưa có tài khoản? ',
-                        style: TextStyle(fontSize: 14, color: Colors.black87)),
+                    const Text(
+                      'Bạn chưa có tài khoản? ',
+                      style: TextStyle(fontSize: 14, color: Colors.black87),
+                    ),
                     TextButton(
                       onPressed: () {
                         Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const RegisterScreen())
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const RegisterScreen(),
+                          ),
                         );
                       },
                       style: TextButton.styleFrom(
@@ -332,7 +396,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: const TextStyle(fontSize: 12, color: Colors.grey),
                       children: [
                         const TextSpan(
-                            text: 'Khi nhập vào Đăng ký, bạn đã xác nhận đồng ý với '),
+                          text:
+                              'Khi nhập vào Đăng ký, bạn đã xác nhận đồng ý với ',
+                        ),
                         TextSpan(
                           text: 'Điều khoản dịch vụ',
                           style: TextStyle(
