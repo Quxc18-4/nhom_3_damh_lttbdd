@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
-import 'package:nhom_3_damh_lttbdd/screens/accountInfoScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/accountSettingScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/albumTabContent.dart';
 import 'package:nhom_3_damh_lttbdd/screens/introductionTabContent.dart'; // Sửa lại đúng đường dẫn file model
 import 'package:nhom_3_damh_lttbdd/screens/followingTabContent.dart';
+
 class PersonalProfileScreen extends StatefulWidget {
-  const PersonalProfileScreen({Key? key}) : super(key: key);
+  // 1. Dòng này của bạn đã đúng
+  final String userId;
+
+  // 2. SỬA LẠI CONSTRUCTOR ĐỂ NHẬN userId
+  const PersonalProfileScreen({
+    Key? key,
+    required this.userId, // Thêm 'required this.userId' vào đây
+  }) : super(key: key);
 
   @override
   State<PersonalProfileScreen> createState() => _PersonalProfileScreenState();
@@ -38,9 +46,7 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
       body: NestedScrollView(
         headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
           return <Widget>[
-            SliverToBoxAdapter(
-              child: _buildProfileHeader(user),
-            ),
+            SliverToBoxAdapter(child: _buildProfileHeader(user)),
             SliverPersistentHeader(
               delegate: _SliverAppBarDelegate(
                 TabBar(
@@ -103,8 +109,12 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
                   icon: const Icon(Icons.settings_outlined),
                   onPressed: () {
                     Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => AccountInfoScreen()));
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            AccountSettingScreen(userId: widget.userId),
+                      ),
+                    );
                   },
                 ),
               ],
@@ -147,9 +157,14 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.orange,
               minimumSize: const Size(double.infinity, 40),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-            child: const Text('Chỉnh sửa Travel Map', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Chỉnh sửa Travel Map',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
           const SizedBox(height: 8),
           Row(
@@ -159,7 +174,9 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
                   onPressed: () {},
                   icon: const Icon(Icons.edit),
                   label: const Text('Viết bài'),
-                  style: OutlinedButton.styleFrom(foregroundColor: Colors.black),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.black,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -168,11 +185,13 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
                   onPressed: () {},
                   icon: const Icon(Icons.camera_alt_outlined),
                   label: const Text('Check-in'),
-                  style: OutlinedButton.styleFrom(foregroundColor: Colors.black),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.black,
+                  ),
                 ),
               ),
             ],
-          )
+          ),
         ],
       ),
     );
@@ -182,7 +201,10 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 4),
         Text(label, style: const TextStyle(fontSize: 14, color: Colors.grey)),
       ],
@@ -214,10 +236,24 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (post.tags.isNotEmpty)
-                  Text(post.tags.firstWhere((t) => t.startsWith('#'), orElse: () => ""),
-                      style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold)),
+                  Text(
+                    post.tags.firstWhere(
+                      (t) => t.startsWith('#'),
+                      orElse: () => "",
+                    ),
+                    style: TextStyle(
+                      color: Colors.blue[800],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 const SizedBox(height: 4),
-                Text(post.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text(
+                  post.title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -226,17 +262,28 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
                       backgroundImage: AssetImage(post.author.avatarUrl),
                     ),
                     const SizedBox(width: 8),
-                    Text(post.author.name, style: const TextStyle(color: Colors.grey)),
+                    Text(
+                      post.author.name,
+                      style: const TextStyle(color: Colors.grey),
+                    ),
                     const Spacer(),
-                    const Icon(Icons.favorite_border, size: 18, color: Colors.grey),
+                    const Icon(
+                      Icons.favorite_border,
+                      size: 18,
+                      color: Colors.grey,
+                    ),
                     const SizedBox(width: 4),
                     Text(post.likeCount.toString()),
                     const SizedBox(width: 16),
-                    const Icon(Icons.chat_bubble_outline, size: 18, color: Colors.grey),
+                    const Icon(
+                      Icons.chat_bubble_outline,
+                      size: 18,
+                      color: Colors.grey,
+                    ),
                     const SizedBox(width: 4),
                     Text(post.commentCount.toString()),
                   ],
-                )
+                ),
               ],
             ),
           ),
@@ -245,7 +292,6 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
     );
   }
 }
-
 
 // Lớp Helper để giữ TabBar "dính" lại khi cuộn
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
@@ -260,11 +306,11 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: Colors.white,
-      child: _tabBar,
-    );
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(color: Colors.white, child: _tabBar);
   }
 
   @override
