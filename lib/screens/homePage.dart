@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:convex_bottom_bar/convex_bottom_bar.dart';
 import 'package:nhom_3_damh_lttbdd/screens/profileScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/exploreScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/saveScreen.dart';
 
 class HomePage extends StatefulWidget {
   // 1. Dòng này của bạn đã đúng
@@ -179,7 +180,7 @@ class _HomePageState extends State<HomePage> {
       case 2:
         return _buildBookingContent();
       case 3:
-        return _buildSavedContent();
+        return SavedScreen(userId: widget.userId);
       case 4:
         return ProfileScreen(userId: widget.userId);
       default:
