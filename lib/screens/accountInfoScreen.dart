@@ -1,14 +1,48 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // Thêm gói intl để định dạng ngày tháng
+import 'package:intl/intl.dart';
 
-class AccountInfoScreen extends StatefulWidget {
+// Màn hình gốc, vẫn có thể được gọi độc lập
+class AccountInfoScreen extends StatelessWidget {
   const AccountInfoScreen({Key? key}) : super(key: key);
 
   @override
-  State<AccountInfoScreen> createState() => _AccountInfoScreenState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(60.0),
+        child: Container(
+          decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200))
+          ),
+          child: AppBar(
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: const Text('Thông tin tài khoản'),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            centerTitle: true,
+          ),
+        ),
+      ),
+      body: const AccountInfoContent(),
+    );
+  }
 }
 
-class _AccountInfoScreenState extends State<AccountInfoScreen> {
+
+// WIDGET MỚI CHỨA TOÀN BỘ NỘI DUNG
+class AccountInfoContent extends StatefulWidget {
+  const AccountInfoContent({Key? key}) : super(key: key);
+
+  @override
+  State<AccountInfoContent> createState() => _AccountInfoContentState();
+}
+
+class _AccountInfoContentState extends State<AccountInfoContent> {
   final _nameController = TextEditingController(text: "Mydei Nguyễn");
   final _bioController = TextEditingController();
   final _cityController = TextEditingController();
@@ -31,6 +65,7 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
     }
   }
 
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -41,57 +76,25 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      // Sử dụng AppBar tùy chỉnh để có nền màu cam
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(60.0),
-        child: Container(
-          decoration: BoxDecoration(
-              color: Colors.orange.shade50,
-              border: Border(bottom: BorderSide(color: Colors.grey.shade200))
-          ),
-          child: AppBar(
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            title: const Text('Thông tin tài khoản'),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            centerTitle: true,
-          ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // --- Phần Avatar và Bio ---
-            _buildAvatarSection(),
-            const SizedBox(height: 24),
-
-            // --- Phần Dữ liệu cá nhân ---
-            _buildPersonalDataSection(context),
-            const SizedBox(height: 24),
-
-            // --- Phần Email ---
-            _buildEmailSection(),
-            const SizedBox(height: 24),
-
-            // --- Phần Số di động ---
-            _buildPhoneSection(),
-            const SizedBox(height: 24),
-
-            // --- Phần Liên kết tài khoản ---
-            _buildLinkedAccountsSection(),
-          ],
-        ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          _buildAvatarSection(),
+          const SizedBox(height: 24),
+          _buildPersonalDataSection(context),
+          const SizedBox(height: 24),
+          _buildEmailSection(),
+          const SizedBox(height: 24),
+          _buildPhoneSection(),
+          const SizedBox(height: 24),
+          _buildLinkedAccountsSection(),
+        ],
       ),
     );
   }
 
-  // --- CÁC WIDGET CON ---
+  // --- CÁC HÀM HELPER ĐÃ ĐƯỢC ĐIỀN ĐẦY ĐỦ ---
 
   Widget _buildAvatarSection() {
     return Column(
@@ -101,7 +104,7 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
           children: [
             const CircleAvatar(
               radius: 50,
-              backgroundImage: AssetImage("assets/images/logo.png"), // Thay bằng avatarPath
+              backgroundImage: AssetImage("assets/images/logo.png"),
             ),
             Container(
               decoration: BoxDecoration(
@@ -233,15 +236,13 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
     return Column(
       children: [
         _buildSectionHeader("Liên kết tài khoản", "", () {}),
-        // Thêm các nút liên kết mạng xã hội ở đây
+        // Có thể thêm các nút liên kết MXH ở đây
       ],
     );
   }
 
-  // --- WIDGET HELPER ---
-
-  Widget _buildSectionHeader(
-      String title, String actionText, VoidCallback onActionTap) {
+  // --- Các hàm Widget Helper ---
+  Widget _buildSectionHeader(String title, String actionText, VoidCallback onActionTap) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
