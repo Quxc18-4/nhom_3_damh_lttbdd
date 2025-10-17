@@ -159,7 +159,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => AccountInfoScreen(),
+                            builder: (context) =>
+                                AccountSettingScreen(userId: widget.userId),
                           ),
                         );
                       },
@@ -263,7 +264,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => AccountInfoScreen()),
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        AccountSettingScreen(userId: widget.userId),
+                  ),
                 );
               },
               style: ElevatedButton.styleFrom(

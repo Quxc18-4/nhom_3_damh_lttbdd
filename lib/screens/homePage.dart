@@ -175,7 +175,7 @@ class _HomePageState extends State<HomePage> {
       case 0:
         return _buildHomeContent();
       case 1:
-        return ExploreScreen();
+        return ExploreScreen(userId: widget.userId);
       case 2:
         return _buildBookingContent();
       case 3:
