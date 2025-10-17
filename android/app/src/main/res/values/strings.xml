@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">Triply</string>
-    <string name="facebook_app_id">698989339302707</string>
-    <string name="facebook_client_token">EAAJ7uiNFWzMBPqDnjtcPKlr6B0osoSFR6lCRDLAxcflcg0Sm65qKZCZBHZBJOcSmkdXQynMjZAEw8mS2UKHk0uJx55Pyd5NfAAxQEuEgZCJZBcY3B2ZB7mVSpewyM2R3NDTQIQPQoDfrgONaGodYy29zFr64PSUWZA0ePPhy7qXykMps3bPUBGWlZAiLFWBkj3R8k9xPQCzIhLkPUc0e8wMBuZAvpOkazy6UPosLR79CJkfWqVNmBLe6bI3uYZBgAB5grVOZA3ZBYgSCR8Fv6</string>
-    <string name="fb_login_protocol_scheme">fb698989339302707</string>
-</resources>
