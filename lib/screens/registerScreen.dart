@@ -1,7 +1,10 @@
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:nhom_3_damh_lttbdd/screens/loginScreen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
@@ -15,34 +18,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
-      TextEditingController();
+  TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
-  // Dán hàm này vào trong class _RegisterScreenState
+  // Hàm hiển thị thông báo lỗi/thành công
+  void _showSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
+  }
+
+  // Hàm tắt vòng xoay loading
+  void _hideLoading() {
+    // Chỉ pop nếu có thể (để tránh lỗi)
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  // =========================================================================
+  // 1. HÀM ĐĂNG KÝ BẰNG EMAIL/PASSWORD
+  // =========================================================================
   Future<void> _registerUser() async {
-    // Lấy dữ liệu từ các controller
     final String name = _nameController.text.trim();
     final String email = _emailController.text.trim();
     final String password = _passwordController.text.trim();
     final String confirmPassword = _confirmPasswordController.text.trim();
 
-    // 1. Kiểm tra đầu vào
     if (name.isEmpty || email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng điền đầy đủ thông tin.')),
-      );
+      _showSnackBar('Vui lòng điền đầy đủ thông tin.');
       return;
     }
 
     if (password != confirmPassword) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mật khẩu xác nhận không khớp.')),
-      );
+      _showSnackBar('Mật khẩu xác nhận không khớp.');
       return;
     }
 
-    // Hiển thị vòng xoay loading (tùy chọn)
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -50,48 +65,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
 
     try {
-      // 2. Tạo người dùng mới với Firebase Authentication
       UserCredential userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: email, password: password);
 
       User? newUser = userCredential.user;
 
       if (newUser != null) {
-        // 3. Lưu thông tin người dùng lên Cloud Firestore
-        // Đây là bước quan trọng, tuân thủ cấu trúc đã thống nhất
+        // Lưu thông tin người dùng lên Cloud Firestore
         await FirebaseFirestore.instance
             .collection('users')
             .doc(newUser.uid)
             .set({
-              'name': name,
-              'email': email,
-              'password': null, // Không bao giờ lưu password ở dạng thô
-              'avatarUrl': '', // URL avatar mặc định
-              'bio': '', // Bio mặc định
-              'authProviders': [
-                'password',
-              ], // Nhà cung cấp xác thực là 'password'
-              'joinedAt':
-                  FieldValue.serverTimestamp(), // Lấy thời gian từ server
-              'followersCount': 0,
-              'followingCount': 0,
-              'userRank': 'Bronze',
-            });
+          'name': name,
+          'email': email,
+          'avatarUrl': '',
+          'bio': '',
+          'authProviders': [
+            'password',
+          ],
+          'joinedAt': FieldValue.serverTimestamp(),
+          'followersCount': 0,
+          'followingCount': 0,
+          'userRank': 'Bronze',
+        });
 
-        // 4. Xử lý sau khi thành công
-        Navigator.of(context).pop(); // Tắt vòng xoay loading
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Đăng ký thành công!')));
-        // Chuyển hướng đến màn hình đăng nhập hoặc trang chủ
+        _hideLoading();
+        _showSnackBar('Đăng ký thành công!');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const LoginScreen()),
         );
       }
     } on FirebaseAuthException catch (e) {
-      Navigator.of(context).pop(); // Tắt vòng xoay loading
-      // 5. Xử lý lỗi
+      _hideLoading();
       String message = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
       if (e.code == 'weak-password') {
         message = 'Mật khẩu quá yếu.';
@@ -100,9 +106,83 @@ class _RegisterScreenState extends State<RegisterScreen> {
       } else if (e.code == 'invalid-email') {
         message = 'Email không hợp lệ.';
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      _showSnackBar(message);
+    }
+  }
+
+  // =========================================================================
+// 2. HÀM ĐĂNG KÝ BẰNG FACEBOOK
+// =========================================================================
+// Đặt import 'dart:io' ở đầu file để dùng Platform
+// Đặt hàm _hideLoading và _showSnackBar trong class _RegisterScreenState
+  Future<void> _signInWithFacebook() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      // THÊM: Xử lý quyền theo dõi trên iOS (Nếu bạn có package app_tracking_transparency)
+      // if (Platform.isIOS) {
+      //   await AppTrackingTransparency.requestTrackingAuthorization();
+      // }
+
+      // 1. Thực hiện Đăng nhập bằng Facebook
+      final LoginResult result = await FacebookAuth.instance.login(
+        permissions: ['email', 'public_profile'],
+      );
+
+      if (result.status == LoginStatus.success) {
+        final accessToken = result.accessToken!.token;
+        final facebookAuthCredential = FacebookAuthProvider.credential(accessToken);
+
+        // 2. Đăng nhập/Đăng ký vào Firebase
+        UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(facebookAuthCredential);
+        User? newUser = userCredential.user;
+
+        if (newUser != null) {
+          // 3. Kiểm tra và Lưu thông tin người dùng lên Cloud Firestore
+          DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(newUser.uid).get();
+
+          if (!userDoc.exists) {
+            String name = newUser.displayName ?? 'Người dùng Facebook';
+            String avatarUrl = newUser.photoURL ?? '';
+
+            await FirebaseFirestore.instance.collection('users').doc(newUser.uid).set({
+              'name': name,
+              'email': newUser.email,
+              'password': null, // Bỏ qua mật khẩu
+              'avatarUrl': avatarUrl,
+              'bio': '',
+              'authProviders': ['facebook'],
+              'joinedAt': FieldValue.serverTimestamp(),
+              'followersCount': 0,
+              'followingCount': 0,
+              'userRank': 'Bronze',
+            });
+          }
+
+          // 4. Xử lý sau khi thành công
+          _hideLoading();
+          _showSnackBar('Đăng nhập/Đăng ký bằng Facebook thành công!');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
+        }
+      } else if (result.status == LoginStatus.cancelled) {
+        _hideLoading();
+        _showSnackBar('Đăng nhập Facebook đã bị hủy.');
+      } else {
+        _hideLoading();
+        _showSnackBar('Lỗi đăng nhập Facebook: ${result.message}');
+      }
+    } on FirebaseAuthException catch (e) {
+      _hideLoading();
+      _showSnackBar('Lỗi Firebase: ${e.message}');
+    } catch (e) {
+      _hideLoading();
+      _showSnackBar('Lỗi không xác định: $e');
     }
   }
 
@@ -388,7 +468,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     _buildSocialButton(
                       imagePath: 'assets/images/facebook.png',
                       onTap: () {
-                        // Handle Facebook login
+                        // GỌI HÀM ĐĂNG NHẬP FACEBOOK
+                        _signInWithFacebook();
                       },
                     ),
                     const SizedBox(width: 16),
@@ -464,7 +545,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       children: [
                         const TextSpan(
                           text:
-                              'Khi nhập vào Đăng ký, bạn đã xác nhận đồng ý với ',
+                          'Khi nhập vào Đăng ký, bạn đã xác nhận đồng ý với ',
                         ),
                         TextSpan(
                           text: 'Điều khoản dịch vụ',
@@ -514,3 +595,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 }
+
+
+
