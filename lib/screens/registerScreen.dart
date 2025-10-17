@@ -1,7 +1,10 @@
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:nhom_3_damh_lttbdd/screens/loginScreen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
@@ -11,38 +14,68 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final TextEditingController _nameController = TextEditingController();
+  // Đổi tên và thêm controller mới
+  final TextEditingController _nicknameController = TextEditingController();
+  final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
-      TextEditingController();
+  TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
-  // Dán hàm này vào trong class _RegisterScreenState
+
+  // Hàm hiển thị thông báo lỗi/thành công
+  void _showSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
+  }
+
+  // Hàm tắt vòng xoay loading
+  void _hideLoading() {
+    // Chỉ pop nếu có thể (để tránh lỗi)
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  // =========================================================================
+  // 1. HÀM ĐĂNG KÝ BẰNG EMAIL/PASSWORD
+  // =========================================================================
+  Future<void> _registerUser() async {
+    final String name = _nameController.text.trim();
+
   Future<void> _registerUser() async {
     // Lấy dữ liệu từ các controller
-    final String name = _nameController.text.trim();
+    final String nickname = _nicknameController.text.trim();
+
     final String email = _emailController.text.trim();
     final String password = _passwordController.text.trim();
     final String confirmPassword = _confirmPasswordController.text.trim();
 
-    // 1. Kiểm tra đầu vào
+
     if (name.isEmpty || email.isEmpty || password.isEmpty) {
+      _showSnackBar('Vui lòng điền đầy đủ thông tin.');
+    // 1. Kiểm tra đầu vào
+    if (nickname.isEmpty || email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Vui lòng điền đầy đủ thông tin.')),
       );
+
       return;
     }
 
     if (password != confirmPassword) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mật khẩu xác nhận không khớp.')),
-      );
+      _showSnackBar('Mật khẩu xác nhận không khớp.');
       return;
     }
 
-    // Hiển thị vòng xoay loading (tùy chọn)
+
+    // Hiển thị vòng xoay loading
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -50,65 +83,125 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
 
     try {
-      // 2. Tạo người dùng mới với Firebase Authentication
       UserCredential userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: email, password: password);
 
       User? newUser = userCredential.user;
 
       if (newUser != null) {
-        // 3. Lưu thông tin người dùng lên Cloud Firestore
-        // Đây là bước quan trọng, tuân thủ cấu trúc đã thống nhất
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(newUser.uid)
-            .set({
+  // 3. Lưu thông tin người dùng lên Cloud Firestore với cấu trúc đầy đủ
+  await FirebaseFirestore.instance
+      .collection('users')
+      .doc(newUser.uid)
+      .set({
+        'name': name, // SỬ DỤNG biến 'name' hoặc 'nickname' của bạn
+        'fullName': '', // Trường họ và tên đầy đủ (Để trống khi đăng ký)
+        'email': email,
+        'password': null, // Không lưu mật khẩu thô
+        'avatarUrl': '',
+        'bio': '',
+        'authProviders': ['password'], // Xác định phương thức đăng ký
+        'joinedAt': FieldValue.serverTimestamp(),
+        'followersCount': 0,
+        'followingCount': 0,
+        'userRank': 'Bronze',
+        'phoneNumber': '',
+        'birthDate': null, // Kiểu DateTime hoặc Timestamp nếu cần
+        'gender': '',
+        'city': '',
+      });
+
+  // Tắt vòng xoay loading
+  _hideLoading();
+  _showSnackBar('Đăng ký thành công!');
+
+  // Chuyển hướng đến màn hình đăng nhập
+  Navigator.pushReplacement(
+    context,
+    MaterialPageRoute(builder: (context) => const LoginScreen()),
+  );
+}
+
+  // =========================================================================
+// 2. HÀM ĐĂNG KÝ BẰNG FACEBOOK
+// =========================================================================
+// Đặt import 'dart:io' ở đầu file để dùng Platform
+// Đặt hàm _hideLoading và _showSnackBar trong class _RegisterScreenState
+  Future<void> _signInWithFacebook() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      // THÊM: Xử lý quyền theo dõi trên iOS (Nếu bạn có package app_tracking_transparency)
+      // if (Platform.isIOS) {
+      //   await AppTrackingTransparency.requestTrackingAuthorization();
+      // }
+
+      // 1. Thực hiện Đăng nhập bằng Facebook
+      final LoginResult result = await FacebookAuth.instance.login(
+        permissions: ['email', 'public_profile'],
+      );
+
+      if (result.status == LoginStatus.success) {
+        final accessToken = result.accessToken!.token;
+        final facebookAuthCredential = FacebookAuthProvider.credential(accessToken);
+
+        // 2. Đăng nhập/Đăng ký vào Firebase
+        UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(facebookAuthCredential);
+        User? newUser = userCredential.user;
+
+        if (newUser != null) {
+          // 3. Kiểm tra và Lưu thông tin người dùng lên Cloud Firestore
+          DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(newUser.uid).get();
+
+          if (!userDoc.exists) {
+            String name = newUser.displayName ?? 'Người dùng Facebook';
+            String avatarUrl = newUser.photoURL ?? '';
+
+            await FirebaseFirestore.instance.collection('users').doc(newUser.uid).set({
               'name': name,
-              'email': email,
-              'password': null, // Không bao giờ lưu password ở dạng thô
-              'avatarUrl': '', // URL avatar mặc định
-              'bio': '', // Bio mặc định
-              'authProviders': [
-                'password',
-              ], // Nhà cung cấp xác thực là 'password'
-              'joinedAt':
-                  FieldValue.serverTimestamp(), // Lấy thời gian từ server
+              'email': newUser.email,
+              'password': null, // Bỏ qua mật khẩu
+              'avatarUrl': avatarUrl,
+              'bio': '',
+              'authProviders': ['facebook'],
+              'joinedAt': FieldValue.serverTimestamp(),
               'followersCount': 0,
               'followingCount': 0,
               'userRank': 'Bronze',
             });
+          }
 
-        // 4. Xử lý sau khi thành công
-        Navigator.of(context).pop(); // Tắt vòng xoay loading
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Đăng ký thành công!')));
-        // Chuyển hướng đến màn hình đăng nhập hoặc trang chủ
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
+          // 4. Xử lý sau khi thành công
+          _hideLoading();
+          _showSnackBar('Đăng nhập/Đăng ký bằng Facebook thành công!');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
+        }
+      } else if (result.status == LoginStatus.cancelled) {
+        _hideLoading();
+        _showSnackBar('Đăng nhập Facebook đã bị hủy.');
+      } else {
+        _hideLoading();
+        _showSnackBar('Lỗi đăng nhập Facebook: ${result.message}');
       }
     } on FirebaseAuthException catch (e) {
-      Navigator.of(context).pop(); // Tắt vòng xoay loading
-      // 5. Xử lý lỗi
-      String message = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
-      if (e.code == 'weak-password') {
-        message = 'Mật khẩu quá yếu.';
-      } else if (e.code == 'email-already-in-use') {
-        message = 'Email này đã được sử dụng.';
-      } else if (e.code == 'invalid-email') {
-        message = 'Email không hợp lệ.';
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      _hideLoading();
+      _showSnackBar('Lỗi Firebase: ${e.message}');
+    } catch (e) {
+      _hideLoading();
+      _showSnackBar('Lỗi không xác định: $e');
     }
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _nicknameController.dispose();
+    _fullNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -127,19 +220,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 18),
-
-                // Logo
                 Center(
                   child: Image.asset(
-                    'assets/images/logo.png', // Thay đổi path của bạn ở đây
+                    'assets/images/logo.png',
                     height: 100,
                     width: 100,
                   ),
                 ),
-
                 const SizedBox(height: 10),
-
-                // Title
                 const Center(
                   child: Text(
                     'Đăng Ký Tài Khoản Mới',
@@ -150,22 +238,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 28),
 
-                // Name Label
+                // --- NICKNAME INPUT ---
                 const Text(
-                  'Tên của bạn',
+                  'Nickname (Tên hiển thị)',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                     color: Colors.black87,
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
-                // Name Input
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -173,9 +257,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     border: Border.all(color: Colors.blue[300]!),
                   ),
                   child: TextField(
-                    controller: _nameController,
+                    controller: _nicknameController,
                     decoration: InputDecoration(
-                      hintText: 'Tên của bạn...',
+                      hintText: 'Tên sẽ hiển thị trong ứng dụng...',
                       hintStyle: TextStyle(
                         color: Colors.grey[400],
                         fontSize: 14,
@@ -195,7 +279,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 16),
 
-                // Email/Phone Label
+                // --- EMAIL INPUT ---
                 const Text(
                   'Số điện thoại hoặc email',
                   style: TextStyle(
@@ -204,10 +288,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     color: Colors.black87,
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
-                // Email/Phone Input
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -237,7 +318,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 16),
 
-                // Password Label
+                // --- PASSWORD INPUT ---
                 const Text(
                   'Mật khẩu',
                   style: TextStyle(
@@ -246,10 +327,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     color: Colors.black87,
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
-                // Password Input
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -276,11 +354,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               : Icons.visibility,
                           color: Colors.grey[400],
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
                       ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
@@ -293,7 +369,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 16),
 
-                // Confirm Password Label
+                // --- CONFIRM PASSWORD INPUT ---
                 const Text(
                   'Xác nhận mật khẩu',
                   style: TextStyle(
@@ -302,10 +378,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     color: Colors.black87,
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
-                // Confirm Password Input
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -316,7 +389,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     controller: _confirmPasswordController,
                     obscureText: _obscureConfirmPassword,
                     decoration: InputDecoration(
-                      hintText: 'Nhập mật khẩu...',
+                      hintText: 'Nhập lại mật khẩu...',
                       hintStyle: TextStyle(
                         color: Colors.grey[400],
                         fontSize: 14,
@@ -332,11 +405,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               : Icons.visibility,
                           color: Colors.grey[400],
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _obscureConfirmPassword = !_obscureConfirmPassword;
-                          });
-                        },
+                        onPressed: () => setState(
+                          () => _obscureConfirmPassword =
+                              !_obscureConfirmPassword,
+                        ),
                       ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
@@ -349,11 +421,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 24),
 
-                // Register Button
+                // --- REGISTER BUTTON ---
                 ElevatedButton(
-                  onPressed: () {
-                    _registerUser();
-                  },
+                  onPressed: _registerUser,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange[400],
                     foregroundColor: Colors.white,
@@ -361,7 +431,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(25),
                     ),
-                    elevation: 0,
                   ),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -380,7 +449,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
 
                 const SizedBox(height: 24),
-
                 // Social Login Buttons
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -388,7 +456,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     _buildSocialButton(
                       imagePath: 'assets/images/facebook.png',
                       onTap: () {
-                        // Handle Facebook login
+                        // GỌI HÀM ĐĂNG NHẬP FACEBOOK
+                        _signInWithFacebook();
                       },
                     ),
                     const SizedBox(width: 16),
@@ -464,7 +533,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       children: [
                         const TextSpan(
                           text:
-                              'Khi nhập vào Đăng ký, bạn đã xác nhận đồng ý với ',
+                          'Khi nhập vào Đăng ký, bạn đã xác nhận đồng ý với ',
                         ),
                         TextSpan(
                           text: 'Điều khoản dịch vụ',
@@ -514,3 +583,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 }
+
+
+

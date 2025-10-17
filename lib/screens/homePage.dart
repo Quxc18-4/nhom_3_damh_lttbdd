@@ -515,7 +515,7 @@ Widget _buildActivityItem(Map<String, dynamic> activity) {
       case 0:
         return _buildHomeContent();
       case 1:
-        return _buildExploreContent();
+        return ExploreScreen(userId: widget.userId);
       case 2:
         return _buildBookingContent();
       case 3:
