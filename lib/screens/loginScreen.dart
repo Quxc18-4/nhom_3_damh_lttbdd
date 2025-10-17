@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ Cần cho Firestore
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart'; // ✅ Cần cho Facebook Login
+
 // Đảm bảo các import này là chính xác
 import 'package:nhom_3_damh_lttbdd/screens/homePage.dart';
 import 'package:nhom_3_damh_lttbdd/screens/registerScreen.dart';
@@ -18,53 +21,63 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _rememberMe = false;
   bool _obscurePassword = true;
-  // Dán hàm này vào trong class _LoginScreenState
-  Future<void> _loginUser() async {
-    final String email = _emailController.text.trim();
-    final String password = _passwordController.text.trim();
 
-    // 1. Kiểm tra đầu vào
-    if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập email và mật khẩu.')),
-      );
-      return;
-    }
+  // =========================================================================
+  // HÀM HIỂN THỊ/ẨN LOADING VÀ SNACKBAR
+  // =========================================================================
 
-    // Hiển thị vòng xoay loading
+  void _showLoading() {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
+  }
+
+  void _hideLoading() {
+    Navigator.of(context).pop();
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  // =========================================================================
+  // 1. HÀM ĐĂNG NHẬP BẰNG EMAIL/PASSWORD
+  // =========================================================================
+  Future<void> _loginUser() async {
+    final String email = _emailController.text.trim();
+    final String password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showSnackBar('Vui lòng nhập email và mật khẩu.');
+      return;
+    }
+
+    _showLoading();
 
     try {
-      // 2. Gọi Firebase để đăng nhập
       final UserCredential userCredential = await FirebaseAuth.instance
           .signInWithEmailAndPassword(email: email, password: password);
 
       final User? user = userCredential.user;
 
       if (user != null) {
-        // Tắt vòng xoay loading
-        Navigator.of(context).pop();
-
+        _hideLoading();
         // 3. Đăng nhập thành công, lấy userID và chuyển hướng
-        // Dùng pushAndRemoveUntil để xóa hết các màn hình cũ
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
-            // Truyền userId qua HomePage
             builder: (context) => HomePage(userId: user.uid),
           ),
-          (Route<dynamic> route) => false,
+              (Route<dynamic> route) => false,
         );
       }
     } on FirebaseAuthException catch (e) {
-      // Tắt vòng xoay loading
-      Navigator.of(context).pop();
+      _hideLoading();
 
-      // 4. Xử lý các lỗi đăng nhập cụ thể
       String message = 'Đã có lỗi xảy ra.';
       if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
         message = 'Email hoặc mật khẩu không chính xác.';
@@ -73,11 +86,87 @@ class _LoginScreenState extends State<LoginScreen> {
       } else if (e.code == 'invalid-email') {
         message = 'Định dạng email không hợp lệ.';
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      _showSnackBar(message);
+    } catch (e) {
+      _hideLoading();
+      _showSnackBar('Lỗi không xác định: $e');
     }
   }
+
+  // =========================================================================
+  // 2. HÀM ĐĂNG NHẬP BẰNG FACEBOOK (Dựa trên code từ RegisterScreen)
+  // =========================================================================
+  Future<void> _signInWithFacebook() async {
+    _showLoading();
+    try {
+      // 1. Thực hiện Đăng nhập bằng Facebook
+      final LoginResult result = await FacebookAuth.instance.login(
+        permissions: ['email', 'public_profile'],
+      );
+
+      if (result.status == LoginStatus.success) {
+        final accessToken = result.accessToken!.token;
+        final facebookAuthCredential =
+        FacebookAuthProvider.credential(accessToken);
+
+        // 2. Đăng nhập/Đăng ký vào Firebase
+        UserCredential userCredential = await FirebaseAuth.instance
+            .signInWithCredential(facebookAuthCredential);
+        User? user = userCredential.user;
+
+        if (user != null) {
+          // 3. Kiểm tra và Lưu thông tin người dùng lên Cloud Firestore
+          // Chỉ tạo user mới nếu chưa tồn tại
+          DocumentSnapshot userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+
+          if (!userDoc.exists) {
+            String name = user.displayName ?? 'Người dùng Facebook';
+            String avatarUrl = user.photoURL ?? '';
+
+            await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+              'name': name,
+              'email': user.email,
+              'password': null,
+              'avatarUrl': avatarUrl,
+              'bio': '',
+              'authProviders': ['facebook'],
+              'joinedAt': FieldValue.serverTimestamp(),
+              'followersCount': 0,
+              'followingCount': 0,
+              'userRank': 'Bronze',
+            });
+          }
+
+          // 4. Xử lý sau khi thành công
+          _hideLoading();
+          _showSnackBar('Đăng nhập bằng Facebook thành công!');
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) => HomePage(userId: user.uid),
+            ),
+                (Route<dynamic> route) => false,
+          );
+        }
+      } else if (result.status == LoginStatus.cancelled) {
+        _hideLoading();
+        _showSnackBar('Đăng nhập Facebook đã bị hủy.');
+      } else {
+        _hideLoading();
+        _showSnackBar('Lỗi đăng nhập Facebook: ${result.message}');
+      }
+    } on FirebaseAuthException catch (e) {
+      _hideLoading();
+      _showSnackBar('Lỗi Firebase: ${e.message}');
+    } catch (e) {
+      _hideLoading();
+      _showSnackBar('Lỗi không xác định: $e');
+    }
+  }
+  // =========================================================================
+  // END HÀM ĐĂNG NHẬP BẰNG FACEBOOK
+  // =========================================================================
 
   @override
   void dispose() {
@@ -86,7 +175,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // Hàm xây dựng nút mạng xã hội (được giữ nguyên)
+  // Hàm xây dựng nút mạng xã hội (giữ nguyên)
   Widget _buildSocialButton({
     required String imagePath,
     required VoidCallback onTap,
@@ -130,7 +219,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 24),
 
-                /// SỬA ĐỔI: Chuyển TextButton thành Text làm tiêu đề
+                /// Tiêu đề
                 const Center(
                   child: Text(
                     'Đăng Nhập',
@@ -143,6 +232,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
 
                 const SizedBox(height: 32),
+
+                // ... (Các trường Email, Password, Nút Login giữ nguyên) ...
 
                 /// Email
                 const Text(
@@ -236,7 +327,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 24),
 
-                /// Login Button (Đã thêm logic chuyển hướng)
+                /// Login Button
                 ElevatedButton(
                   onPressed: _loginUser,
                   style: ElevatedButton.styleFrom(
@@ -266,7 +357,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 16),
 
-                /// Remember me & Forgot Password
+                /// Remember me & Forgot Password (Giữ nguyên)
                 Row(
                   children: [
                     SizedBox(
@@ -318,38 +409,40 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 24),
 
-                /// Social buttons
+                /// Social buttons (ĐÃ SỬA: Thêm onTap cho Facebook)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     _buildSocialButton(
                       imagePath: 'assets/images/facebook.png',
-                      onTap: () {
-                        // Handle Facebook login
-                      },
+                      onTap: _signInWithFacebook, // ✅ GỌI HÀM FACEBOOK LOGIN
                     ),
                     const SizedBox(width: 16),
                     _buildSocialButton(
                       imagePath: 'assets/images/google.png',
                       onTap: () {
-                        // Handle Google login
+                        // Handle Google login (Chưa tích hợp)
                       },
                     ),
                     const SizedBox(width: 16),
                     _buildSocialButton(
                       imagePath: 'assets/images/apple.png',
-                      onTap: () {},
+                      onTap: () {
+                        // Handle Apple login (Chưa tích hợp)
+                      },
                     ),
                     const SizedBox(width: 16),
                     _buildSocialButton(
                       imagePath: 'assets/images/instagram.png',
                       onTap: () {
-                        // Handle Instagram login
+                        // Handle Instagram login (Chưa tích hợp)
                       },
                     ),
                   ],
                 ),
                 const SizedBox(height: 24),
+
+                // ... (Phần Đăng ký và Điều khoản giữ nguyên) ...
 
                 /// Sign up link
                 Row(
@@ -397,7 +490,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         const TextSpan(
                           text:
-                              'Khi nhập vào Đăng ký, bạn đã xác nhận đồng ý với ',
+                          'Khi nhập vào Đăng ký, bạn đã xác nhận đồng ý với ',
                         ),
                         TextSpan(
                           text: 'Điều khoản dịch vụ',
