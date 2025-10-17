@@ -3,6 +3,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ Cần cho Firestore
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart'; // ✅ Cần cho Facebook Login
+import 'package:google_sign_in/google_sign_in.dart'; // ✅ Cần cho Google Sign-In
 
 // Đảm bảo các import này là chính xác
 import 'package:nhom_3_damh_lttbdd/screens/homePage.dart';
@@ -39,9 +40,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   // =========================================================================
@@ -69,10 +70,8 @@ class _LoginScreenState extends State<LoginScreen> {
         // 3. Đăng nhập thành công, lấy userID và chuyển hướng
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(
-            builder: (context) => HomePage(userId: user.uid),
-          ),
-              (Route<dynamic> route) => false,
+          MaterialPageRoute(builder: (context) => HomePage(userId: user.uid)),
+          (Route<dynamic> route) => false,
         );
       }
     } on FirebaseAuthException catch (e) {
@@ -106,8 +105,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (result.status == LoginStatus.success) {
         final accessToken = result.accessToken!.token;
-        final facebookAuthCredential =
-        FacebookAuthProvider.credential(accessToken);
+        final facebookAuthCredential = FacebookAuthProvider.credential(
+          accessToken,
+        );
 
         // 2. Đăng nhập/Đăng ký vào Firebase
         UserCredential userCredential = await FirebaseAuth.instance
@@ -117,25 +117,30 @@ class _LoginScreenState extends State<LoginScreen> {
         if (user != null) {
           // 3. Kiểm tra và Lưu thông tin người dùng lên Cloud Firestore
           // Chỉ tạo user mới nếu chưa tồn tại
-          DocumentSnapshot userDoc =
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+          DocumentSnapshot userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
 
           if (!userDoc.exists) {
             String name = user.displayName ?? 'Người dùng Facebook';
             String avatarUrl = user.photoURL ?? '';
 
-            await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-              'name': name,
-              'email': user.email,
-              'password': null,
-              'avatarUrl': avatarUrl,
-              'bio': '',
-              'authProviders': ['facebook'],
-              'joinedAt': FieldValue.serverTimestamp(),
-              'followersCount': 0,
-              'followingCount': 0,
-              'userRank': 'Bronze',
-            });
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .set({
+                  'name': name,
+                  'email': user.email,
+                  'password': null,
+                  'avatarUrl': avatarUrl,
+                  'bio': '',
+                  'authProviders': ['facebook'],
+                  'joinedAt': FieldValue.serverTimestamp(),
+                  'followersCount': 0,
+                  'followingCount': 0,
+                  'userRank': 'Bronze',
+                });
           }
 
           // 4. Xử lý sau khi thành công
@@ -143,10 +148,8 @@ class _LoginScreenState extends State<LoginScreen> {
           _showSnackBar('Đăng nhập bằng Facebook thành công!');
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(
-              builder: (context) => HomePage(userId: user.uid),
-            ),
-                (Route<dynamic> route) => false,
+            MaterialPageRoute(builder: (context) => HomePage(userId: user.uid)),
+            (Route<dynamic> route) => false,
           );
         }
       } else if (result.status == LoginStatus.cancelled) {
@@ -166,6 +169,96 @@ class _LoginScreenState extends State<LoginScreen> {
   }
   // =========================================================================
   // END HÀM ĐĂNG NHẬP BẰNG FACEBOOK
+  // =========================================================================
+
+  // =========================================================================
+  // 3. HÀM ĐĂNG NHẬP BẰNG GOOGLE
+  // =========================================================================
+
+  // Dán hàm này vào trong class _LoginScreenState của bạn
+
+  // Thay thế toàn bộ hàm này trong file loginScreen.dart hoặc registerScreen.dart
+
+  Future<void> _signInWithGoogle() async {
+    _showLoading(); // Dùng lại hàm helper _showLoading của bạn
+    try {
+      // 1. Bắt đầu quá trình đăng nhập với Google.
+      // Đây là cách gọi đúng cho phiên bản mới nhất.
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+
+      // 2. Nếu người dùng hủy, googleUser sẽ là null.
+      if (googleUser == null) {
+        _hideLoading();
+        _showSnackBar(
+          'Đăng nhập Google đã bị hủy.',
+        ); // Dùng helper _showSnackBar
+        return;
+      }
+
+      // 3. Lấy thông tin xác thực (idToken và accessToken) từ tài khoản Google.
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      // 4. Tạo một "Firebase credential" từ các token đó.
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // 5. Dùng credential đó để đăng nhập vào Firebase.
+      final UserCredential userCredential = await FirebaseAuth.instance
+          .signInWithCredential(credential);
+      final User? user = userCredential.user;
+
+      if (user != null) {
+        // 6. Kiểm tra và lưu thông tin vào Firestore.
+        final DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (!userDoc.exists) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+                'name': user.displayName ?? 'Người dùng Google',
+                'fullName': user.displayName ?? '',
+                'email': user.email ?? '',
+                'avatarUrl': user.photoURL ?? '',
+                'authProviders': ['google.com'],
+                'bio': '',
+                'password': null,
+                'joinedAt': FieldValue.serverTimestamp(),
+                'followersCount': 0,
+                'followingCount': 0,
+                'userRank': 'Bronze',
+                'phoneNumber': user.phoneNumber ?? '',
+                'birthDate': null,
+                'gender': '',
+                'city': '',
+              });
+        }
+
+        // 7. Điều hướng đến trang chủ.
+        _hideLoading();
+        if (mounted) {
+          // Thêm kiểm tra `mounted` để đảm bảo an toàn
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => HomePage(userId: user.uid)),
+            (Route<dynamic> route) => false,
+          );
+        }
+      }
+    } catch (e) {
+      _hideLoading();
+      _showSnackBar('Lỗi đăng nhập Google: $e');
+    }
+  }
+
+  // =========================================================================
+  // END HÀM ĐĂNG NHẬP BẰNG GOOGLE
   // =========================================================================
 
   @override
@@ -421,7 +514,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     _buildSocialButton(
                       imagePath: 'assets/images/google.png',
                       onTap: () {
-                        // Handle Google login (Chưa tích hợp)
+                        _signInWithGoogle(); // ✅ GỌI HÀM GOOGLE LOGIN
                       },
                     ),
                     const SizedBox(width: 16),
@@ -490,7 +583,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         const TextSpan(
                           text:
-                          'Khi nhập vào Đăng ký, bạn đã xác nhận đồng ý với ',
+                              'Khi nhập vào Đăng ký, bạn đã xác nhận đồng ý với ',
                         ),
                         TextSpan(
                           text: 'Điều khoản dịch vụ',
