@@ -4,14 +4,7 @@ import 'package:convex_bottom_bar/convex_bottom_bar.dart';
 import 'package:nhom_3_damh_lttbdd/screens/profileScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/exploreScreen.dart';
 import 'tripPlannerScreen.dart'; // Đảm bảo bạn có file này và class TravelPlanPage
-
-// Giả định các đường dẫn assets
-// LƯU Ý: Thay đổi các đường dẫn này cho phù hợp với cấu trúc project thực tế của bạn
-const String _ASSET_AVATAR = 'assets/images/image_a3aba3.png';
-const String _ASSET_HOTEL = 'assets/images/image_a3ab0a.png';
-const String _ASSET_FLIGHT_GREEN = 'assets/images/image_a3ab43.png';
-const String _ASSET_FLIGHT_BLUE_ALERT = 'assets/images/image_a3a800.png';
-
+import 'package:nhom_3_damh_lttbdd/screens/saveScreen.dart';
 
 class HomePage extends StatefulWidget {
   final String userId;
@@ -519,7 +512,7 @@ Widget _buildActivityItem(Map<String, dynamic> activity) {
       case 2:
         return _buildBookingContent();
       case 3:
-        return _buildSavedContent();
+        return SavedScreen(userId: widget.userId);
       case 4:
         return _buildTripCoinContent();
       case 5:
