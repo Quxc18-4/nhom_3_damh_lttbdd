@@ -45,14 +45,13 @@ dependencies:
   firebase_auth: ^6.1.1
   flutter_facebook_auth: ^6.1.1
   google_fonts: ^6.3.2
-  shared_preferences: ^2.5.3
-
-
+  shared_preferences: ^2.5.3 
+  google_sign_in: ^6.2.0    
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  
+
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
