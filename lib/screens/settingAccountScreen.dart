@@ -1,7 +1,58 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:nhom_3_damh_lttbdd/screens/loginScreen.dart';
 
 class SettingAccountScreen extends StatelessWidget {
   const SettingAccountScreen({Key? key}) : super(key: key);
+
+  Future<void> _signOut(BuildContext context) async {
+    // Hiển thị dialog xác nhận trước khi đăng xuất
+    bool? confirmLogout = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Xác nhận đăng xuất'),
+          content: const Text(
+            'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này?',
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Hủy'),
+              onPressed: () => Navigator.of(context).pop(false), // Trả về false
+            ),
+            TextButton(
+              child: const Text(
+                'Đăng xuất',
+                style: TextStyle(color: Colors.red),
+              ),
+              onPressed: () => Navigator.of(context).pop(true), // Trả về true
+            ),
+          ],
+        );
+      },
+    );
+
+    // Nếu người dùng xác nhận
+    if (confirmLogout == true) {
+      try {
+        // Gọi Firebase Auth để đăng xuất
+        await FirebaseAuth.instance.signOut();
+
+        // Sau khi đăng xuất thành công, chuyển về màn hình Login
+        // Dùng pushAndRemoveUntil để xóa hết các màn hình cũ
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (Route<dynamic> route) => false, // Xóa hết stack
+        );
+      } catch (e) {
+        // Hiển thị lỗi nếu có
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi đăng xuất: $e')));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,96 +90,92 @@ class SettingAccountScreen extends StatelessWidget {
             children: [
               // --- Nhóm Tài khoản & Bảo mật ---
               _buildSectionTitle("Tài khoản & Bảo mật"),
-              _buildClickableCard(
-                [
-                  _buildMenuItem(
-                    icon: Icons.person_outline,
-                    title: "Thông tin tài khoản",
-                    onTap: () => _showActionInProgress(context, "Thông tin tài khoản"),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.lock_outline,
-                    title: "Mật khẩu & Bảo mật",
-                    onTap: () => _showActionInProgress(context, "Mật khẩu & Bảo mật"),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.privacy_tip_outlined,
-                    title: "Thiết lập chế độ riêng tư",
-                    onTap: () => _showActionInProgress(context, "Thiết lập riêng tư"),
-                    showDivider: false,
-                  ),
-                ],
-              ),
+              _buildClickableCard([
+                _buildMenuItem(
+                  icon: Icons.person_outline,
+                  title: "Thông tin tài khoản",
+                  onTap: () =>
+                      _showActionInProgress(context, "Thông tin tài khoản"),
+                ),
+                _buildMenuItem(
+                  icon: Icons.lock_outline,
+                  title: "Mật khẩu & Bảo mật",
+                  onTap: () =>
+                      _showActionInProgress(context, "Mật khẩu & Bảo mật"),
+                ),
+                _buildMenuItem(
+                  icon: Icons.privacy_tip_outlined,
+                  title: "Thiết lập chế độ riêng tư",
+                  onTap: () =>
+                      _showActionInProgress(context, "Thiết lập riêng tư"),
+                  showDivider: false,
+                ),
+              ]),
               const SizedBox(height: 24),
 
               // --- Nhóm Cài đặt ---
               _buildSectionTitle("Cài đặt"),
-              _buildClickableCard(
-                [
-                  _buildMenuItem(
-                    icon: Icons.public,
-                    title: "Quốc gia",
-                    trailingText: "Việt Nam",
-                    onTap: () => _showActionInProgress(context, "Chọn quốc gia"),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.monetization_on_outlined,
-                    title: "Tiền tệ",
-                    trailingText: "Việt Nam Đồng",
-                    onTap: () => _showActionInProgress(context, "Chọn tiền tệ"),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.translate,
-                    title: "Ngôn ngữ",
-                    trailingText: "Tiếng Việt",
-                    onTap: () => _showActionInProgress(context, "Chọn ngôn ngữ"),
-                    showDivider: false,
-                  ),
-                ],
-              ),
+              _buildClickableCard([
+                _buildMenuItem(
+                  icon: Icons.public,
+                  title: "Quốc gia",
+                  trailingText: "Việt Nam",
+                  onTap: () => _showActionInProgress(context, "Chọn quốc gia"),
+                ),
+                _buildMenuItem(
+                  icon: Icons.monetization_on_outlined,
+                  title: "Tiền tệ",
+                  trailingText: "Việt Nam Đồng",
+                  onTap: () => _showActionInProgress(context, "Chọn tiền tệ"),
+                ),
+                _buildMenuItem(
+                  icon: Icons.translate,
+                  title: "Ngôn ngữ",
+                  trailingText: "Tiếng Việt",
+                  onTap: () => _showActionInProgress(context, "Chọn ngôn ngữ"),
+                  showDivider: false,
+                ),
+              ]),
               const SizedBox(height: 24),
 
               // --- Nhóm Cài đặt khác ---
               _buildSectionTitle("Cài đặt khác"),
-              _buildClickableCard(
-                [
-                  _buildMenuItem(
-                    icon: Icons.notifications_outlined,
-                    title: "Cài đặt thông báo",
-                    onTap: () => _showActionInProgress(context, "Cài đặt thông báo"),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.article_outlined,
-                    title: "Điều khoản & điều kiện",
-                    onTap: () => _showActionInProgress(context, "Điều khoản"),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.shield_outlined,
-                    title: "Chính sách quyền riêng tư",
-                    onTap: () => _showActionInProgress(context, "Chính sách"),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.help_outline,
-                    title: "Trợ giúp & Hỗ trợ",
-                    onTap: () => _showActionInProgress(context, "Hỗ trợ"),
-                    showDivider: false,
-                  ),
-                ],
-              ),
+              _buildClickableCard([
+                _buildMenuItem(
+                  icon: Icons.notifications_outlined,
+                  title: "Cài đặt thông báo",
+                  onTap: () =>
+                      _showActionInProgress(context, "Cài đặt thông báo"),
+                ),
+                _buildMenuItem(
+                  icon: Icons.article_outlined,
+                  title: "Điều khoản & điều kiện",
+                  onTap: () => _showActionInProgress(context, "Điều khoản"),
+                ),
+                _buildMenuItem(
+                  icon: Icons.shield_outlined,
+                  title: "Chính sách quyền riêng tư",
+                  onTap: () => _showActionInProgress(context, "Chính sách"),
+                ),
+                _buildMenuItem(
+                  icon: Icons.help_outline,
+                  title: "Trợ giúp & Hỗ trợ",
+                  onTap: () => _showActionInProgress(context, "Hỗ trợ"),
+                  showDivider: false,
+                ),
+              ]),
               const SizedBox(height: 24),
 
               // --- Nút Đăng xuất ---
-              _buildClickableCard(
-                [
-                  _buildMenuItem(
-                    icon: Icons.logout,
-                    title: "Đăng xuất",
-                    textColor: Colors.red, // Thêm màu đỏ để nhấn mạnh
-                    onTap: () => _showActionInProgress(context, "Đăng xuất"),
-                    showDivider: false,
-                  ),
-                ],
-              ),
+              _buildClickableCard([
+                _buildMenuItem(
+                  icon: Icons.logout,
+                  title: "Đăng xuất",
+                  textColor: Colors.red, // Thêm màu đỏ để nhấn mạnh
+                  onTap: () => _signOut(context),
+                  showDivider: false,
+                ),
+              ]),
             ],
           ),
         ),
@@ -164,7 +211,7 @@ class SettingAccountScreen extends StatelessWidget {
             color: Colors.grey.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
-          )
+          ),
         ],
       ),
       child: Column(children: items),
@@ -176,8 +223,8 @@ class SettingAccountScreen extends StatelessWidget {
     required IconData icon,
     required String title,
     required VoidCallback onTap,
-    String? trailingText,      // Mới: Thêm text ở cuối
-    Color? textColor,          // Mới: Tùy chỉnh màu chữ
+    String? trailingText, // Mới: Thêm text ở cuối
+    Color? textColor, // Mới: Tùy chỉnh màu chữ
     bool showDivider = true,
   }) {
     return Material(
@@ -208,15 +255,23 @@ class SettingAccountScreen extends StatelessWidget {
                       style: const TextStyle(fontSize: 16, color: Colors.grey),
                     ),
                   const SizedBox(width: 8),
-                  Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: Colors.grey[400],
+                  ),
                 ],
               ),
             ),
             if (showDivider)
               Padding(
                 padding: const EdgeInsets.only(left: 50.0),
-                child: Divider(height: 1, thickness: 1, color: Colors.grey[100]),
-              )
+                child: Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: Colors.grey[100],
+                ),
+              ),
           ],
         ),
       ),
