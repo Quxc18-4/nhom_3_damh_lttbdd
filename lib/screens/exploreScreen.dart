@@ -119,7 +119,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                       ),
                       const SizedBox(width: 12),
                       const Text(
-                        "Mydei",
+                        "Quoc Danh",
                         style: TextStyle(
                           color: Colors.black,
                           fontWeight: FontWeight.bold,

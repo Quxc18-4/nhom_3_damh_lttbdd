@@ -5,20 +5,22 @@ import 'package:nhom_3_damh_lttbdd/screens/profileScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/exploreScreen.dart';
 import 'tripPlannerScreen.dart'; // Đảm bảo bạn có file này và class TravelPlanPage
 import 'package:nhom_3_damh_lttbdd/screens/saveScreen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // Giả định các đường dẫn assets
 const String _ASSET_AVATAR = 'assets/images/image 8.png';
 const String _ASSET_HOTEL = 'assets/images/Frame 332.png';
 const String _ASSET_FLIGHT_GREEN = 'assets/images/Frame 331.png';
 const String _ASSET_FLIGHT_BLUE_ALERT = 'assets/images/Frame 341.png';
-const String _ASSET_NOTI_BELL = 'assets/images/Frame 342.png'; // Placeholder cho Thông báo giá vé
-const String _ASSET_CAR_RENTAL = 'assets/images/Frame 334.png'; // Placeholder cho Thuê xe
+const String _ASSET_NOTI_BELL =
+    'assets/images/Frame 342.png'; // Placeholder cho Thông báo giá vé
+const String _ASSET_CAR_RENTAL =
+    'assets/images/Frame 334.png'; // Placeholder cho Thuê xe
+
 class HomePage extends StatefulWidget {
   final String userId;
-  const HomePage({
-    Key? key,
-    required this.userId,
-  }) : super(key: key);
+  const HomePage({Key? key, required this.userId}) : super(key: key);
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -26,98 +28,186 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
-  
+
+  // --- THÊM CÁC BIẾN STATE ---
+  String _userNickname = ''; // Để lưu nickname
+  String _userAvatarUrl = ''; // Để lưu URL avatar
+  bool _isLoadingUserData = true; // Để kiểm soát trạng thái loading
+
   // Dữ liệu mẫu cho Lịch trình Đà Lạt
   final List<Map<String, dynamic>> _dalatActivities = [
-    {"time": "4:30", "title": "Thức dậy", "iconAsset": Icons.wb_sunny_outlined, "iconColor": Colors.amber},
-    {"time": "5:30", "title": "Săn bình minh/Săn mây", "iconAsset": Icons.cloud_outlined, "iconColor": Colors.blueGrey},
-    {"time": "7:30", "title": "Ăn sáng", "iconAsset": Icons.restaurant, "iconColor": Colors.lightBlueAccent},
-    {"time": "8:30", "title": "Cà phê/Chụp ảnh", "iconAsset": Icons.camera_alt_outlined, "iconColor": Colors.brown},
+    {
+      "time": "4:30",
+      "title": "Thức dậy",
+      "iconAsset": Icons.wb_sunny_outlined,
+      "iconColor": Colors.amber,
+    },
+    {
+      "time": "5:30",
+      "title": "Săn bình minh/Săn mây",
+      "iconAsset": Icons.cloud_outlined,
+      "iconColor": Colors.blueGrey,
+    },
+    {
+      "time": "7:30",
+      "title": "Ăn sáng",
+      "iconAsset": Icons.restaurant,
+      "iconColor": Colors.lightBlueAccent,
+    },
+    {
+      "time": "8:30",
+      "title": "Cà phê/Chụp ảnh",
+      "iconAsset": Icons.camera_alt_outlined,
+      "iconColor": Colors.brown,
+    },
   ];
 
   // Dữ liệu mẫu cho các dịch vụ (sử dụng asset placeholder)
   final List<Map<String, dynamic>> _services = [
     // Tim chuyến bay (Green background)
-    {"title": "Tìm chuyến bay", "assetPath": _ASSET_FLIGHT_GREEN, "bgColor": const Color(0xFFC5E1A5)}, 
+    {
+      "title": "Tìm chuyến bay",
+      "assetPath": _ASSET_FLIGHT_GREEN,
+      "bgColor": const Color(0xFFC5E1A5),
+    },
     // Khách sạn (Orange background)
-    {"title": "Khách sạn/Điểm lưu trú", "assetPath": _ASSET_HOTEL, "bgColor": const Color(0xFFFFE0B2)}, 
+    {
+      "title": "Khách sạn/Điểm lưu trú",
+      "assetPath": _ASSET_HOTEL,
+      "bgColor": const Color(0xFFFFE0B2),
+    },
     // Tình trạng chuyến bay (Blue background + Red alert dot)
-    {"title": "Tình trạng chuyến bay", "assetPath": _ASSET_FLIGHT_BLUE_ALERT, "bgColor": const Color(0xFFBBDEFB)}, 
+    {
+      "title": "Tình trạng chuyến bay",
+      "assetPath": _ASSET_FLIGHT_BLUE_ALERT,
+      "bgColor": const Color(0xFFBBDEFB),
+    },
     // Thông báo giá vé (Màu chuông, dùng Icon)
-    {"title": "Thông báo giá vé", "assetPath": _ASSET_NOTI_BELL, "bgColor": const Color(0xFFF8BBD0)}, 
+    {
+      "title": "Thông báo giá vé",
+      "assetPath": _ASSET_NOTI_BELL,
+      "bgColor": const Color(0xFFF8BBD0),
+    },
     // 5. Thuê xe (MỚI: Dùng ASSET_CAR_RENTAL)
-    {"title": "Thuê xe", "assetPath": _ASSET_CAR_RENTAL, "bgColor": const Color(0xFFB2EBF2)},
+    {
+      "title": "Thuê xe",
+      "assetPath": _ASSET_CAR_RENTAL,
+      "bgColor": const Color(0xFFB2EBF2),
+    },
   ];
 
   // Dữ liệu mẫu cho Tin tức
   final List<Map<String, dynamic>> _newsFeed = [
-    {"tag": "#Đà Lạt", "content": "Đà Lạt chào đón tôi bằng không khí se lạnh và những con đèo", "image": "https://images.unsplash.com/photo-1596765798402-421b16c4c0b5?fit=crop&w=400&q=80"},
+    {
+      "tag": "#Đà Lạt",
+      "content": "Đà Lạt chào đón tôi bằng không khí se lạnh và những con đèo",
+      "image":
+          "https://images.unsplash.com/photo-1596765798402-421b16c4c0b5?fit=crop&w=400&q=80",
+    },
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData(); // Gọi hàm tải dữ liệu khi widget được tạo
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final docSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId) // Sử dụng userId được truyền vào
+          .get();
+
+      if (docSnapshot.exists && mounted) {
+        // Kiểm tra mounted trước khi setState
+        final data = docSnapshot.data()!;
+        setState(() {
+          // Lưu nickname (từ trường 'name') và avatarUrl
+          _userNickname = data['name'] ?? 'Người dùng';
+          _userAvatarUrl = data['avatarUrl'] ?? '';
+          _isLoadingUserData = false; // Tắt loading
+        });
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoadingUserData = false;
+          }); // Tắt loading nếu không tìm thấy user
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingUserData = false;
+        }); // Tắt loading nếu có lỗi
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi tải thông tin người dùng: $e')),
+        );
+      }
+    }
+  }
 
   // 4. Widget Activity Item trong Travel Plan Preview
   // 4. Widget Activity Item trong Travel Plan Preview
-// 4. Widget Activity Item trong Travel Plan Preview - ĐÃ CHỈNH SỬA THEO ẢNH
-Widget _buildActivityItem(Map<String, dynamic> activity) {
-  return Container(
-    padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
-    margin: const EdgeInsets.only(bottom: 10.0),
-    decoration: BoxDecoration(
-      color: const Color(0xFFE3F2FD), // 💙 Xanh nhạt bên trong
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(
-        color: const Color(0xFF64B5F6), // 💙 Xanh đậm hơn để làm viền
-        width: 1.5,
+  // 4. Widget Activity Item trong Travel Plan Preview - ĐÃ CHỈNH SỬA THEO ẢNH
+  Widget _buildActivityItem(Map<String, dynamic> activity) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+      margin: const EdgeInsets.only(bottom: 10.0),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE3F2FD), // 💙 Xanh nhạt bên trong
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF64B5F6), // 💙 Xanh đậm hơn để làm viền
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withOpacity(0.1),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.blue.withOpacity(0.1),
-          blurRadius: 6,
-          offset: const Offset(0, 3),
-        ),
-      ],
-    ),
-    child: Row(
-      children: [
-        Icon(Icons.access_time, size: 16, color: Colors.blue.shade700),
-        const SizedBox(width: 8),
-        Text(
-          activity["time"].toString(),
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-            color: Colors.blue.shade800,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            activity["title"].toString(),
-            style: const TextStyle(
+      child: Row(
+        children: [
+          Icon(Icons.access_time, size: 16, color: Colors.blue.shade700),
+          const SizedBox(width: 8),
+          Text(
+            activity["time"].toString(),
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
               fontSize: 14,
-              color: Colors.black87,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: (activity["iconColor"] as Color).withOpacity(0.15),
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Icon(
-              activity["iconAsset"] as IconData,
-              size: 18,
-              color: activity["iconColor"] as Color,
+              color: Colors.blue.shade800,
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              activity["title"].toString(),
+              style: const TextStyle(fontSize: 14, color: Colors.black87),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: (activity["iconColor"] as Color).withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Icon(
+                activity["iconAsset"] as IconData,
+                size: 18,
+                color: activity["iconColor"] as Color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   // 3. Widget Travel Plan Preview
   Widget _buildTravelPlanPreview() {
@@ -138,17 +228,26 @@ Widget _buildActivityItem(Map<String, dynamic> activity) {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const TravelPlanPage()),
+                    MaterialPageRoute(
+                      builder: (context) => const TravelPlanPage(),
+                    ),
                   );
                 },
-                child: const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.grey),
+                child: const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 18,
+                  color: Colors.grey,
+                ),
               ),
             ],
           ),
         ),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16.0),
-          child: Text('20/08/2025 - 22/08/2025', style: TextStyle(color: Colors.grey, fontSize: 13)),
+          child: Text(
+            '20/08/2025 - 22/08/2025',
+            style: TextStyle(color: Colors.grey, fontSize: 13),
+          ),
         ),
         const SizedBox(height: 10),
 
@@ -160,7 +259,10 @@ Widget _buildActivityItem(Map<String, dynamic> activity) {
             children: [
               Container(
                 color: Colors.white, // Nền trắng cho TabBar
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 4.0,
+                ),
                 child: TabBar(
                   isScrollable: true,
                   labelColor: Colors.black,
@@ -171,13 +273,37 @@ Widget _buildActivityItem(Map<String, dynamic> activity) {
                   padding: EdgeInsets.zero,
                   labelPadding: const EdgeInsets.symmetric(horizontal: 8.0),
                   tabs: [
-                    Tab(child: Text('Day 1 - 20/08', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-                    Tab(child: Text('Day 2 - 21/08', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-                    Tab(child: Text('Day 3 - 22/08', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+                    Tab(
+                      child: Text(
+                        'Day 1 - 20/08',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    Tab(
+                      child: Text(
+                        'Day 2 - 21/08',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    Tab(
+                      child: Text(
+                        'Day 3 - 22/08',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
-              
+
               // Danh sách hoạt động
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -218,190 +344,213 @@ Widget _buildActivityItem(Map<String, dynamic> activity) {
 
   // 1. Widget Header tùy chỉnh
   Widget _buildCustomHeader() {
-  return Container(
-    decoration: const BoxDecoration(
-      color: Color(0xFFFFE0B2), // 🌟 vàng nhạt
-      borderRadius: BorderRadius.only(
-        bottomLeft: Radius.circular(24),
-        bottomRight: Radius.circular(24),
+    // Lấy thời gian hiện tại để chào đúng buổi
+    String greeting;
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      greeting = 'Chào buổi sáng';
+    } else if (hour < 18) {
+      greeting = 'Chào buổi chiều';
+    } else {
+      greeting = 'Chào buổi tối';
+    }
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFE0B2), // 🌟 vàng nhạt
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(24),
+        ),
       ),
-    ),
-    padding: const EdgeInsets.fromLTRB(16, 50, 16, 20),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // --- Dòng ngày tháng + icon ---
-        Row(
-          children: [
-            const Icon(Icons.calendar_month, size: 20, color: Colors.black54),
-            const SizedBox(width: 8),
-            Text(
-              'Thứ Bảy, 10 Tháng 5 2025',
-              style: TextStyle(color: Colors.grey[700], fontSize: 14),
-            ),
-            const Spacer(),
-            IconButton(
-              icon: const Icon(Icons.qr_code_scanner_outlined, color: Colors.black),
-              onPressed: () {},
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            ),
-            IconButton(
-              icon: const Icon(Icons.notifications_none, color: Colors.black),
-              onPressed: () {},
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            ),
-          ],
-        ),
+      padding: const EdgeInsets.fromLTRB(16, 50, 16, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // --- Dòng ngày tháng + icon (giữ nguyên) ---
+          Row(
+            // ...
+          ),
+          const SizedBox(height: 12),
 
-        const SizedBox(height: 12),
+          // --- Avatar + Chào --- (ĐÃ CẬP NHẬT)
+          Row(
+            children: [
+              // Hiển thị avatar động hoặc placeholder
+              _isLoadingUserData
+                  ? const CircleAvatar(
+                      radius: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : ClipOval(
+                      child: _userAvatarUrl.isNotEmpty
+                          ? Image.network(
+                              // Tải ảnh từ URL
+                              _userAvatarUrl,
+                              width: 40,
+                              height: 40,
+                              fit: BoxFit.cover,
+                              // Hiển thị placeholder trong khi tải hoặc nếu lỗi
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return const CircleAvatar(
+                                      radius: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    );
+                                  },
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const CircleAvatar(
+                                    radius: 20,
+                                    child: Icon(Icons.person),
+                                  ),
+                            )
+                          : const CircleAvatar(
+                              radius: 20,
+                              child: Icon(Icons.person),
+                            ), // Avatar mặc định nếu URL rỗng
+                    ),
+              const SizedBox(width: 10),
+              // Hiển thị lời chào + nickname động
+              _isLoadingUserData
+                  ? const Text('Đang tải...', style: TextStyle(fontSize: 18))
+                  : Text(
+                      '$greeting, $_userNickname!', // Sử dụng biến state
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFFF9800),
+                      ),
+                      overflow:
+                          TextOverflow.ellipsis, // Tránh tràn nếu tên quá dài
+                    ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
-        // --- Avatar + chào buổi sáng ---
-        Row(
-          children: [
-            ClipOval(
-              child: Image.asset(
-                _ASSET_AVATAR,
-                width: 40,
-                height: 40,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    const CircleAvatar(radius: 20, child: Icon(Icons.person)),
+          // --- Search Bar ---
+          TextField(
+            decoration: InputDecoration(
+              hintText: 'Tìm kiếm...',
+              prefixIcon: const Icon(Icons.search, color: Colors.grey),
+              filled: true,
+              fillColor: Colors.white, // nền trắng trong khung vàng
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: 0,
+                horizontal: 16,
               ),
-            ),
-            const SizedBox(width: 10),
-            const Text(
-              'Chào buổi sáng, Mydei!',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFFFF9800),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
               ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 16),
-
-        // --- Search Bar ---
-        TextField(
-          decoration: InputDecoration(
-            hintText: 'Tìm kiếm...',
-            prefixIcon: const Icon(Icons.search, color: Colors.grey),
-            filled: true,
-            fillColor: Colors.white, // nền trắng trong khung vàng
-            contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
             ),
           ),
+
+          const SizedBox(height: 12),
+
+          // --- Suggestion Chips ---
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildSuggestionChip('Hotel Đà Lạt', const Color(0xFFFFCC80)),
+                _buildSuggestionChip(
+                  'Thuê xe tại Huế',
+                  const Color(0xFFB3E5FC),
+                ),
+                _buildSuggestionChip(
+                  'Vé máy bay giá rẻ',
+                  const Color(0xFFFFAB91),
+                ),
+                _buildSuggestionChip('Tour Đà Lạt', const Color(0xFFC5E1A5)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestionChip(String text, Color bgColor) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+
+  // Widget Dịch vụ (sử dụng asset placeholder) - ĐÃ FIX LỖI NULL
+  Widget _buildServiceSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 10),
+          child: Text(
+            'Dịch vụ',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
         ),
+        SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            itemCount: _services.length,
+            itemBuilder: (context, index) {
+              final service = _services[index];
+              final String? assetPath = service['assetPath'] as String?;
 
-        const SizedBox(height: 12),
+              final serviceIcon = (assetPath != null && assetPath.isNotEmpty)
+                  ? Image.asset(
+                      assetPath,
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Icon(Icons.error, color: Colors.red),
+                    )
+                  : const Icon(Icons.error, color: Colors.red);
 
-        // --- Suggestion Chips ---
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _buildSuggestionChip('Hotel Đà Lạt', const Color(0xFFFFCC80)),
-              _buildSuggestionChip('Thuê xe tại Huế', const Color(0xFFB3E5FC)),
-              _buildSuggestionChip('Vé máy bay giá rẻ', const Color(0xFFFFAB91)),
-              _buildSuggestionChip('Tour Đà Lạt', const Color(0xFFC5E1A5)),
-            ],
+              final Color bgColor =
+                  (service["bgColor"] as Color?) ?? Colors.grey.shade200;
+
+              return Container(
+                width: 70,
+                margin: const EdgeInsets.only(right: 15),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      radius: 25,
+                      backgroundColor: bgColor,
+                      child: serviceIcon,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      service["title"].toString(),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 12),
+                      maxLines: 2,
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ],
-    ),
-  );
-}
-
-Widget _buildSuggestionChip(String text, Color bgColor) {
-  return Container(
-    margin: const EdgeInsets.only(right: 8),
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    decoration: BoxDecoration(
-      color: bgColor,
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Text(
-      text,
-      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-    ),
-  );
-}
-
-
-
-
-
-  
-  // Widget Dịch vụ (sử dụng asset placeholder) - ĐÃ FIX LỖI NULL
-  Widget _buildServiceSection() {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 10),
-        child: Text(
-          'Dịch vụ',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-      ),
-      SizedBox(
-        height: 100,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          itemCount: _services.length,
-          itemBuilder: (context, index) {
-            final service = _services[index];
-            final String? assetPath = service['assetPath'] as String?;
-
-            final serviceIcon = (assetPath != null && assetPath.isNotEmpty)
-                ? Image.asset(
-                    assetPath,
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const Icon(Icons.error, color: Colors.red),
-                  )
-                : const Icon(Icons.error, color: Colors.red);
-
-            final Color bgColor =
-                (service["bgColor"] as Color?) ?? Colors.grey.shade200;
-
-            return Container(
-              width: 70,
-              margin: const EdgeInsets.only(right: 15),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 25,
-                    backgroundColor: bgColor,
-                    child: serviceIcon,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    service["title"].toString(),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12),
-                    maxLines: 2,
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-    ],
-  );
-}
-
+    );
+  }
 
   // Widget Travel Map
   Widget _buildTravelMapSection() {
@@ -413,12 +562,18 @@ Widget _buildSuggestionChip(String text, Color bgColor) {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Travel Map của bạn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              const Text(
+                'Travel Map của bạn',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
               const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.grey),
             ],
           ),
           const SizedBox(height: 4),
-          const Text('Đã khám phá 8/64 tỉnh thành tại Việt Nam', style: TextStyle(color: Colors.grey, fontSize: 13)),
+          const Text(
+            'Đã khám phá 8/64 tỉnh thành tại Việt Nam',
+            style: TextStyle(color: Colors.grey, fontSize: 13),
+          ),
         ],
       ),
     );
@@ -460,7 +615,11 @@ Widget _buildSuggestionChip(String text, Color bgColor) {
                   width: 60,
                   height: 60,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(width: 60, height: 60, color: Colors.grey.shade300),
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 60,
+                    height: 60,
+                    color: Colors.grey.shade300,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -468,11 +627,17 @@ Widget _buildSuggestionChip(String text, Color bgColor) {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_newsFeed[0]["tag"].toString(), style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                    Text(
+                      _newsFeed[0]["tag"].toString(),
+                      style: const TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(
-                      _newsFeed[0]["content"].toString(), 
-                      maxLines: 2, 
+                      _newsFeed[0]["content"].toString(),
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 14),
                     ),
@@ -493,14 +658,14 @@ Widget _buildSuggestionChip(String text, Color bgColor) {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildCustomHeader(),
-         
+
           _buildServiceSection(),
           _buildTravelMapSection(),
           const SizedBox(height: 10),
           _buildTravelPlanPreview(),
           const SizedBox(height: 20),
           _buildNewsFeedSection(),
-          const SizedBox(height: 40), 
+          const SizedBox(height: 40),
         ],
       ),
     );
