@@ -1,5 +1,12 @@
 import 'package:flutter/material.dart';
-
+import 'dart:convert';
+// Cần cập nhật đường dẫn import cho phù hợp với cấu trúc project của bạn
+import '../model/travel_day.dart'; 
+import '../services/local_plan_service.dart';
+import '../services/local_plan_service.dart';
+// Trong lib/screens/tripPlannerScreen.dart
+import 'package:nhom_3_damh_lttbdd/model/activity.dart'; 
+// ...
 class TravelPlanPage extends StatefulWidget {
   const TravelPlanPage({super.key});
 
@@ -9,117 +16,103 @@ class TravelPlanPage extends StatefulWidget {
 
 class _TravelPlanPageState extends State<TravelPlanPage>
     with SingleTickerProviderStateMixin {
+  
+  // Service để lưu/tải dữ liệu
+  final LocalPlanService _localPlanService = LocalPlanService();
+
   late TabController _tabController;
 
   bool _isDeleteMode = false;
   bool _isAddingActivity = false;
 
-  // Dữ liệu mẫu ban đầu cho 7 ngày
-  final List<List<Map<String, dynamic>>> _dayActivities = [
-    // Day 1: Tím
-    [
-      {"time": "4:30", "title": "Thức dậy", "icon": Icons.wb_sunny_outlined, "color": const Color(0xFFE0B0FF)},
-      {"time": "5:30", "title": "Săn bình minh", "icon": Icons.cloud_queue_rounded, "color": const Color(0xFFC7B1E4)},
-      {"time": "7:30", "title": "Ăn sáng", "icon": Icons.restaurant, "color": const Color(0xFFE0B0FF)},
-      {"time": "8:30", "title": "Cà phê/Chụp ảnh", "icon": Icons.photo_camera, "color": const Color(0xFFC7B1E4)},
-      {"time": "11:00", "title": "Ăn trưa", "icon": Icons.restaurant, "color": const Color(0xFFE0B0FF)},
-      {"time": "12:00", "title": "Nghỉ ngơi", "icon": Icons.bed_outlined, "color": const Color(0xFFC7B1E4)},
-      {"time": "15:00", "title": "Cà phê/Chụp ảnh", "icon": Icons.photo_camera, "color": const Color(0xFFE0B0FF)},
-      {"time": "18:00", "title": "Ăn tối", "icon": Icons.restaurant, "color": const Color(0xFFC7B1E4)},
-      {"time": "20:00", "title": "Vui chơi", "icon": Icons.celebration, "color": const Color(0xFFE0B0FF)},
-      {"time": "23:00", "title": "Nghỉ ngơi", "icon": Icons.bed_outlined, "color": const Color(0xFFC7B1E4)},
-    ],
-    // Day 2: Hồng
-    [
-      {"time": "4:30", "title": "Thức dậy", "icon": Icons.wb_sunny_outlined, "color": const Color(0xFFFFCCF5)},
-      {"time": "5:30", "title": "Săn bình minh", "icon": Icons.cloud_queue_rounded, "color": const Color(0xFFFFB0C7)},
-      {"time": "7:30", "title": "Ăn sáng", "icon": Icons.restaurant, "color": const Color(0xFFFFCCF5)},
-      {"time": "8:30", "title": "Cà phê/Chụp ảnh", "icon": Icons.photo_camera, "color": const Color(0xFFFFB0C7)},
-      {"time": "11:00", "title": "Ăn trưa", "icon": Icons.restaurant, "color": const Color(0xFFFFCCF5)},
-      {"time": "12:00", "title": "Nghỉ ngơi", "icon": Icons.bed_outlined, "color": const Color(0xFFFFB0C7)},
-      {"time": "15:00", "title": "Cà phê/Chụp ảnh", "icon": Icons.photo_camera, "color": const Color(0xFFFFCCF5)},
-      {"time": "18:00", "title": "Ăn tối", "icon": Icons.restaurant, "color": const Color(0xFFFFB0C7)},
-      {"time": "20:00", "title": "Vui chơi", "icon": Icons.celebration, "color": const Color(0xFFFFCCF5)},
-      {"time": "23:00", "title": "Nghỉ ngơi", "icon": Icons.bed_outlined, "color": const Color(0xFFFFB0C7)},
-    ],
-    // Day 3: Xanh dương
-    [
-      {"time": "4:30", "title": "Thức dậy", "icon": Icons.wb_sunny_outlined, "color": const Color(0xFFB0D5FF), "detail": "Vệ sinh cá nhân."},
-      {"time": "5:30", "title": "Săn bình minh", "icon": Icons.cloud_queue_rounded, "color": const Color(0xFFC7E2FF), "detail": "Ngắm bình minh ở hồ Tuyền Lâm."},
-      {"time": "7:30", "title": "Ăn sáng", "icon": Icons.restaurant, "color": const Color(0xFFB0D5FF), "detail": "Bún bò Huế ở chợ."},
-      {"time": "8:30", "title": "Cà phê/Chụp ảnh", "icon": Icons.photo_camera, "color": const Color(0xFFC7E2FF), "detail": "Mua quà lưu niệm."},
-      {"time": "11:00", "title": "Ăn trưa", "icon": Icons.restaurant, "color": const Color(0xFFB0D5FF), "detail": "Ăn trưa cuối cùng tại Đà Lạt."},
-      {"time": "12:00", "title": "Nghỉ ngơi", "icon": Icons.bed_outlined, "color": const Color(0xFFC7E2FF), "detail": "Thu xếp hành lý."},
-      {"time": "15:00", "title": "Cà phê/Chụp ảnh", "icon": Icons.photo_camera, "color": const Color(0xFFB0D5FF), "detail": "Chụp ảnh tại Ga Đà Lạt."},
-      {"time": "18:00", "title": "Ăn tối", "icon": Icons.restaurant, "color": const Color(0xFFC7E2FF), "detail": "Ăn nhẹ trước khi ra sân bay."},
-      {"time": "20:00", "title": "Vui chơi", "icon": Icons.celebration, "color": const Color(0xFFB0D5FF), "detail": "Ra sân bay/bến xe."},
-      {"time": "23:00", "title": "Nghỉ ngơi", "icon": Icons.bed_outlined, "color": const Color(0xFFC7E2FF), "detail": "Về đến nhà."},
-    ],
-    // Day 4: Xanh lá (Hoạt động trống để test thêm mới)
-    [],
-    // Day 5: Vàng
-    [],
-    // Day 6: Đỏ
-    [],
-    // Day 7: Xanh ngọc
-    [],
-  ];
+  // Dữ liệu chính: List<TravelDay> được tải từ local
+  List<TravelDay> _travelPlan = []; 
 
-  // Dữ liệu ngày và màu sắc hiển thị cho 7 ngày
-  final List<Map<String, dynamic>> _dayInfo = [
-    {'day': 1, 'date': '20/08', 'mainColor': const Color(0xFF9933CC), 'accentColor': const Color(0xFFE0B0FF)}, // Tím
-    {'day': 2, 'date': '21/08', 'mainColor': const Color(0xFFFF6699), 'accentColor': const Color(0xFFFFCCF5)}, // Hồng
-    {'day': 3, 'date': '22/08', 'mainColor': const Color(0xFF3399FF), 'accentColor': const Color(0xFFB0D5FF)}, // Xanh dương
-    {'day': 4, 'date': '23/08', 'mainColor': const Color(0xFF4CAF50), 'accentColor': const Color(0xFFC8E6C9)}, // Xanh lá
-    {'day': 5, 'date': '24/08', 'mainColor': const Color(0xFFFFC107), 'accentColor': const Color(0xFFFFECB3)}, // Vàng
-    {'day': 6, 'date': '25/08', 'mainColor': const Color(0xFFE53935), 'accentColor': const Color(0xFFFFCDD2)}, // Đỏ
-    {'day': 7, 'date': '26/08', 'mainColor': const Color(0xFF00BCD4), 'accentColor': const Color(0xFFB2EBF2)}, // Xanh ngọc
+  // Dữ liệu ngày và màu sắc hiển thị cho 7 ngày (STATIC DATA)
+  final List<Map<String, dynamic>> _dayInfo = const [
+    {'day': 1, 'date': '20/08', 'mainColor': Color(0xFF9933CC), 'accentColor': Color(0xFFE0B0FF)}, // Tím
+    {'day': 2, 'date': '21/08', 'mainColor': Color(0xFFFF6699), 'accentColor': Color(0xFFFFCCF5)}, // Hồng
+    {'day': 3, 'date': '22/08', 'mainColor': Color(0xFF3399FF), 'accentColor': Color(0xFFB0D5FF)}, // Xanh dương
+    {'day': 4, 'date': '23/08', 'mainColor': Color(0xFF4CAF50), 'accentColor': Color(0xFFC8E6C9)}, // Xanh lá
+    {'day': 5, 'date': '24/08', 'mainColor': Color(0xFFFFC107), 'accentColor': Color(0xFFFFECB3)}, // Vàng
+    {'day': 6, 'date': '25/08', 'mainColor': Color(0xFFE53935), 'accentColor': Color(0xFFFFCDD2)}, // Đỏ
+    {'day': 7, 'date': '26/08', 'mainColor': Color(0xFF00BCD4), 'accentColor': Color(0xFFB2EBF2)}, // Xanh ngọc
   ];
 
 
   final TextEditingController _timeController = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _detailController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    // Khởi tạo TabController với 7 ngày
-    _tabController = TabController(length: _dayActivities.length, vsync: this);
+    _tabController = TabController(length: _dayInfo.length, vsync: this);
     _tabController.addListener(_handleTabChange);
-    _sortAllActivities();
-  }
-
-  // Xử lý khi đổi tab để tự động tắt chế độ thêm/xóa
-  void _handleTabChange() {
-    setState(() {
-      _isAddingActivity = false;
-      _isDeleteMode = false;
-    });
-  }
-
-  @override
-  void dispose() {
-    _tabController.removeListener(_handleTabChange);
-    _tabController.dispose();
-    _timeController.dispose();
-    _titleController.dispose();
-    super.dispose();
+    _loadTravelPlan(); // Tải dữ liệu từ local
   }
   
-  // HÀM: Lấy danh sách hoạt động của ngày đang chọn
-  List<Map<String, dynamic>> _getCurrentActivities() {
-    if (_tabController.index >= 0 && _tabController.index < _dayActivities.length) {
-      return _dayActivities[_tabController.index];
+  // --- LOGIC VỀ DỮ LIỆU VÀ LOCAL STORAGE ---
+
+  // Khởi tạo mẫu hoạt động đơn giản cho Ngày 1 nếu chưa có dữ liệu
+  List<Activity> _createSampleActivities(Map<String, dynamic> dayInfo) {
+    final Color accentColor = dayInfo['accentColor'] as Color;
+    return [
+      Activity(time: "4:30", title: "Thức dậy", icon: Icons.wb_sunny_outlined, color: accentColor),
+      Activity(time: "5:30", title: "Săn bình minh", icon: Icons.cloud_queue_rounded, color: accentColor),
+      Activity(time: "7:30", title: "Ăn sáng", icon: Icons.restaurant, color: accentColor),
+    ];
+  }
+
+  // Tải dữ liệu từ Local Storage
+  Future<void> _loadTravelPlan() async {
+    final loadedPlan = await _localPlanService.loadAllDays();
+
+    if (loadedPlan.isEmpty) {
+      // Nếu không có dữ liệu, tạo cấu trúc 7 ngày rỗng/mẫu ban đầu
+      final initialPlan = List<TravelDay>.generate(_dayInfo.length, (index) {
+        final info = _dayInfo[index];
+        return TravelDay(
+          day: info['day'] as int,
+          date: info['date'] as String,
+          tabIndex: index,
+          activities: index == 0 ? _createSampleActivities(info) : [], 
+        );
+      });
+      await _localPlanService.saveAllDays(initialPlan);
+      _sortAllActivities(initialPlan);
+      setState(() {
+        _travelPlan = initialPlan;
+      });
+    } else {
+      // Đã có dữ liệu, sắp xếp và load
+      _sortAllActivities(loadedPlan);
+      setState(() {
+        _travelPlan = loadedPlan;
+      });
+    }
+  }
+
+  // Lưu dữ liệu vào Local Storage
+  Future<void> _saveTravelPlan() async {
+    await _localPlanService.saveAllDays(_travelPlan);
+  }
+
+  // Lấy danh sách hoạt động của ngày đang chọn (dùng Model)
+  List<Activity> _getCurrentActivities() {
+    if (_tabController.index >= 0 && _tabController.index < _travelPlan.length) {
+      return _travelPlan[_tabController.index].activities;
     }
     return []; 
   }
 
   // Sắp xếp hoạt động cho tất cả các ngày
-  void _sortAllActivities() {
-    for (var activities in _dayActivities) {
-      activities.sort((a, b) {
-        final timeA = _convertTime(a["time"]);
-        final timeB = _convertTime(b["time"]);
+  void _sortAllActivities([List<TravelDay>? plan]) {
+    final listToSort = plan ?? _travelPlan;
+    for (var day in listToSort) {
+      day.activities.sort((a, b) {
+        final timeA = _convertTime(a.time);
+        final timeB = _convertTime(b.time);
         return timeA.compareTo(timeB);
       });
     }
@@ -133,45 +126,99 @@ class _TravelPlanPageState extends State<TravelPlanPage>
     return hour * 60 + minute;
   }
 
-  // Thêm hoạt động vào ngày đang chọn
-  void _addActivity() {
-    final time = _timeController.text.trim();
-    final title = _titleController.text.trim();
-    if (time.isNotEmpty && title.isNotEmpty) {
-      setState(() {
-        final currentDayIndex = _tabController.index;
-        // Lấy màu sắc phù hợp với ngày đang chọn
-        final selectedDayInfo = _dayInfo[currentDayIndex];
-        
-        _getCurrentActivities().add({
-          "time": time,
-          "title": title,
-          "icon": Icons.place, 
-          "color": selectedDayInfo['accentColor'] as Color, // Dùng màu nhấn (accentColor)
-          "detail": "Chi tiết cho hoạt động mới."
-        });
-        
-        // Sắp xếp lại chỉ ngày hiện tại
-        _getCurrentActivities().sort((a, b) => _convertTime(a["time"]).compareTo(_convertTime(b["time"])));
-        
-        _isAddingActivity = false;
-        _timeController.clear();
-        _titleController.clear();
-      });
-    }
+// Thêm hoạt động vào ngày đang chọn
+void _addActivity() async {
+  final time = _timeController.text.trim();
+  final title = _titleController.text.trim();
+  
+  // 1. LẤY GIÁ TRỊ TỪ CONTROLLER MỚI
+  final detail = _detailController.text.trim(); 
+  
+  if (time.isNotEmpty && title.isNotEmpty) {
+    setState(() {
+      final currentDayIndex = _tabController.index;
+      final selectedDayInfo = _dayInfo[currentDayIndex];
+      
+      final newActivity = Activity(
+        time: time,
+        title: title,
+        icon: Icons.place, 
+        color: selectedDayInfo['accentColor'] as Color, 
+        // 2. SỬ DỤNG GIÁ TRỊ LẤY ĐƯỢC
+        // Nếu trường detail rỗng, lưu là null, nếu không thì lưu chuỗi
+        detail: detail.isEmpty ? null : detail 
+      );
+      
+      _travelPlan[currentDayIndex].activities.add(newActivity);
+      
+      _travelPlan[currentDayIndex].activities.sort((a, b) => _convertTime(a.time).compareTo(_convertTime(b.time)));
+      
+      _isAddingActivity = false;
+      _timeController.clear();
+      _titleController.clear();
+      _detailController.clear(); // 3. CLEAR CONTROLLER MỚI
+    });
+    await _saveTravelPlan(); // LƯU VÀO LOCAL
   }
+}
 
-  // HÀM: Xóa hoạt động khỏi ngày đang chọn
-  void _removeActivity(int index) {
+  // Xóa hoạt động khỏi ngày đang chọn
+  void _removeActivity(int index) async {
     setState(() {
       _getCurrentActivities().removeAt(index);
     });
+    await _saveTravelPlan(); // LƯU VÀO LOCAL
   }
   
-  // HÀM: Hiển thị Popup chi tiết cho MỘT ngày (khi nhấn 'Xem tất cả')
+  // --- POPUP & HIỂN THỊ CHI TIẾT ---
+
+  // Hiển thị Popup chi tiết cho MỘT hoạt động (dùng Model)
+  void _showDetailPopupFromModel(Activity activity) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final detail = activity.detail ?? ''; 
+        
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Text('${activity.time} - ${activity.title}', style: const TextStyle(fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                Row(
+                  children: [
+                    Icon(activity.icon, color: activity.color),
+                    const SizedBox(width: 8),
+                    const Text('Thời gian: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text(activity.time),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                
+                if (detail.isNotEmpty) ...[
+                  const Text('Chi tiết:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text(detail),
+                ],
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Đóng'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Hiển thị Popup chi tiết cho MỘT ngày (khi nhấn 'Xem tất cả')
   void _showAllActivitiesForDay(int dayIndex) {
     final info = _dayInfo[dayIndex];
-    final activities = _dayActivities[dayIndex];
+    final activities = _travelPlan[dayIndex].activities; 
     
     showModalBottomSheet(
       context: context,
@@ -185,12 +232,10 @@ class _TravelPlanPageState extends State<TravelPlanPage>
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              // Thanh kéo
               Container(
                 width: 40, height: 4, margin: const EdgeInsets.only(bottom: 15),
                 decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
               ),
-              // Tiêu đề
               Text(
                 'Chi tiết Lịch trình Ngày ${info['day']} (${info['date']})',
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -199,8 +244,7 @@ class _TravelPlanPageState extends State<TravelPlanPage>
               // Danh sách hoạt động chi tiết
               Expanded(
                 child: ListView(
-                  // Dùng _buildActivityItem cho list view trong popup chi tiết
-                  children: activities.map((activity) => _buildActivityItem(activity, activities.indexOf(activity))).toList(),
+                  children: activities.map((activity) => _buildActivityItemFromModel(activity, activities.indexOf(activity))).toList(),
                 ),
               ),
               ElevatedButton(
@@ -219,58 +263,12 @@ class _TravelPlanPageState extends State<TravelPlanPage>
     );
   }
 
-  // HÀM: Hiển thị popup chi tiết kế hoạch
-  // HÀM: Hiển thị popup chi tiết kế hoạch
-void _showDetailPopup(Map<String, dynamic> activity) {
-  showDialog(
-    context: context,
-    builder: (context) {
-      // 1. CHỈNH SỬA Ở ĐÂY: Lấy chi tiết, nếu null thì là chuỗi rỗng
-      final detail = activity['detail'] as String? ?? ''; 
-      
-      return AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: Text(activity['time'] + ' - ' + activity['title'], style: const TextStyle(fontWeight: FontWeight.bold)),
-        content: SingleChildScrollView(
-          child: ListBody(
-            children: <Widget>[
-              Row(
-                children: [
-                  Icon(activity['icon'] as IconData, color: activity['color'] as Color),
-                  const SizedBox(width: 8),
-                  const Text('Thời gian: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text(activity['time']),
-                ],
-              ),
-              const SizedBox(height: 10),
-              
-              // 2. CHỈNH SỬA Ở ĐÂY: Chỉ hiển thị tiêu đề và nội dung nếu chi tiết không rỗng
-              if (detail.isNotEmpty) ...[
-                const Text('Chi tiết:', style: TextStyle(fontWeight: FontWeight.bold)),
-                Text(detail),
-              ],
-            ],
-          ),
-        ),
-        actions: <Widget>[
-          TextButton(
-            child: const Text('Đóng'),
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-          ),
-        ],
-      );
-    },
-  );
-}
-
-  // WIDGET: Thiết kế dạng Capsule (1 Cột) - Giữ nguyên
-  Widget _buildActivityCapsule(Map<String, dynamic> activity, {required Color accentColor}) {
-    if (activity["time"].isEmpty) return const SizedBox.shrink();
+  // WIDGET: Thiết kế dạng Capsule (Nhận vào Activity Model)
+  Widget _buildActivityCapsuleFromModel(Activity activity, {required Color accentColor}) {
+    if (activity.time.isEmpty) return const SizedBox.shrink();
 
     return GestureDetector(
-      onTap: () => _showDetailPopup(activity),
+      onTap: () => _showDetailPopupFromModel(activity),
       child: Container(
         width: double.infinity,
         height: 60, 
@@ -289,12 +287,12 @@ void _showDetailPopup(Map<String, dynamic> activity) {
               height: 44,
               margin: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
-                color: (activity["color"] as Color).withOpacity(0.5),
+                color: activity.color.withOpacity(0.5),
                 shape: BoxShape.circle,
               ),
               child: Center( 
                 child: Icon(
-                  activity['icon'] as IconData,
+                  activity.icon,
                   size: 22, 
                   color: Colors.white,
                 ),
@@ -309,7 +307,7 @@ void _showDetailPopup(Map<String, dynamic> activity) {
                   TextSpan(
                     children: [
                       TextSpan(
-                        text: activity['time'] + ' ',
+                        text: '${activity.time} ',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
@@ -317,7 +315,7 @@ void _showDetailPopup(Map<String, dynamic> activity) {
                         ),
                       ),
                       TextSpan(
-                        text: activity['title'],
+                        text: activity.title,
                         style: const TextStyle(
                           fontSize: 14,
                           color: Colors.black54,
@@ -380,10 +378,11 @@ void _showDetailPopup(Map<String, dynamic> activity) {
     );
   }
 
-  // Logic giới hạn 5 hoạt động trong Popup tổng quan
-  Widget _buildDayPlanInPopup(int dayIndex, String date, Color mainColor, List<Map<String, dynamic>> activities) {
-    // Lấy màu accent từ _dayInfo
-    final accentColor = _dayInfo[dayIndex]['accentColor'] as Color;
+  // WIDGET: Kế hoạch ngày trong Popup Tổng quan (dùng Model)
+  Widget _buildDayPlanInPopup(int dayIndex, String date, Color mainColor) {
+    final info = _dayInfo[dayIndex];
+    final activities = _travelPlan[dayIndex].activities; 
+    final accentColor = info['accentColor'] as Color;
     
     const int limit = 5;
     final isOverLimit = activities.length > limit;
@@ -411,7 +410,7 @@ void _showDetailPopup(Map<String, dynamic> activity) {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Hiển thị các hoạt động giới hạn
-                    ...limitedActivities.map((activity) => _buildActivityCapsule(activity, accentColor: accentColor)).toList(),
+                    ...limitedActivities.map((activity) => _buildActivityCapsuleFromModel(activity, accentColor: accentColor)).toList(),
                     
                     // Nút "Xem tất cả" nếu vượt quá giới hạn
                     if (isOverLimit)
@@ -423,11 +422,11 @@ void _showDetailPopup(Map<String, dynamic> activity) {
                             _showAllActivitiesForDay(dayIndex); // Mở popup chi tiết ngày
                           },
                           child: Text.rich(
-                            TextSpan( // ĐÃ XÓA const Ở ĐÂY
+                            TextSpan( 
                               children: [
-                                TextSpan( // KHÔNG dùng const ở đây
+                                TextSpan( 
                                   text: 'Xem tất cả ${activities.length} hoạt động ',
-                                  style: const TextStyle( // Dùng const cho TextStyle vì các giá trị là hằng số
+                                  style: const TextStyle( 
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.blue,
@@ -455,7 +454,7 @@ void _showDetailPopup(Map<String, dynamic> activity) {
     );
   }
 
-  // HÀM HIỂN THỊ POPUP TỔNG QUAN (Đã cập nhật để dùng dữ liệu 7 ngày)
+  // HÀM HIỂN THỊ POPUP TỔNG QUAN (Đã cập nhật để dùng dữ liệu 7 ngày từ _travelPlan)
   void _showSharePopup() {
     showModalBottomSheet(
       context: context,
@@ -490,7 +489,7 @@ void _showDetailPopup(Map<String, dynamic> activity) {
                     children: [
                       WidgetSpan(child: Icon(Icons.wb_sunny_outlined, color: Color(0xFF4CAF50), size: 24)),
                       TextSpan(
-                        text: ' Travel Plan - 7 Ngày tại Đà Lạt ', // Cập nhật thành 7 ngày
+                        text: ' Travel Plan - 7 Ngày tại Đà Lạt ', 
                         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
                       ),
                       WidgetSpan(child: Icon(Icons.cloud_outlined, color: Color(0xFF2196F3), size: 24)),
@@ -506,14 +505,12 @@ void _showDetailPopup(Map<String, dynamic> activity) {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
                       children: [
-                        ...List.generate(_dayActivities.length, (index) {
+                        ...List.generate(_travelPlan.length, (index) {
                           final info = _dayInfo[index];
-                          // Truyền index để sử dụng cho chức năng xem tất cả
                           return _buildDayPlanInPopup(
                             index, 
                             info['date'] as String, 
                             info['mainColor'] as Color, 
-                            _dayActivities[index],
                           );
                         }),
                         const SizedBox(height: 30),
@@ -545,8 +542,8 @@ void _showDetailPopup(Map<String, dynamic> activity) {
     );
   }
 
-  // WIDGET HOẠT ĐỘNG (Đã cập nhật để dùng _removeActivity)
-  Widget _buildActivityItem(Map<String, dynamic> activity, int index) {
+  // WIDGET HOẠT ĐỘNG DẠNG LIST TILE (Nhận vào Activity Model)
+  Widget _buildActivityItemFromModel(Activity activity, int index) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
@@ -561,33 +558,33 @@ void _showDetailPopup(Map<String, dynamic> activity) {
         ],
       ),
       child: ListTile(
-        onTap: () => _showDetailPopup(activity), // Cho phép bấm vào để xem chi tiết
+        onTap: () => _showDetailPopupFromModel(activity), // Dùng hàm nhận Model
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), 
         leading: Container(
           width: 42, 
           height: 42,
           decoration: BoxDecoration(
-            color: (activity["color"] as Color).withOpacity(0.15),
+            color: activity.color.withOpacity(0.15),
             shape: BoxShape.circle,
           ),
           child: Center( 
             child: Icon(
-              activity["icon"] as IconData,
+              activity.icon,
               size: 22, 
-              color: activity["color"] as Color,
+              color: activity.color,
             ),
           ),
         ),
         title: Row(
           children: [
             Text(
-              activity["time"],
+              activity.time,
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                activity["title"],
+                activity.title,
                 style: const TextStyle(fontWeight: FontWeight.w500),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -596,7 +593,7 @@ void _showDetailPopup(Map<String, dynamic> activity) {
         ),
         trailing: _isDeleteMode
             ? GestureDetector(
-                onTap: () => _removeActivity(index), // SỬ DỤNG HÀM MỚI
+                onTap: () => _removeActivity(index), 
                 child: Container(
                   width: 28,
                   height: 28,
@@ -614,7 +611,7 @@ void _showDetailPopup(Map<String, dynamic> activity) {
   }
 
 
-  // WIDGET KẾ HOẠCH NGÀY (Sử dụng _getCurrentActivities())
+  // WIDGET KẾ HOẠCH NGÀY (Sử dụng _getCurrentActivities() và _buildActivityItemFromModel)
   Widget _buildDayPlan() {
     final activities = _getCurrentActivities();
     return SingleChildScrollView(
@@ -633,69 +630,139 @@ void _showDetailPopup(Map<String, dynamic> activity) {
             ),
           ...List.generate(
             activities.length,
-            (index) => _buildActivityItem(activities[index], index),
+            (index) => _buildActivityItemFromModel(activities[index], index),
           ),
         ],
       ),
     );
   }
   
-  // WIDGET FORM THÊM HOẠT ĐỘNG (Giữ nguyên)
-  Widget _buildAddActivityForm() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.shade100, width: 2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Thêm hoạt động cho Ngày ${_tabController.index + 1}", // Chỉ rõ ngày nào
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+  // WIDGET FORM THÊM HOẠT ĐỘNG
+Widget _buildAddActivityForm() {
+  // LƯU Ý: Đảm bảo bạn đã khai báo `final TextEditingController _detailController = TextEditingController();`
+  // và dispose nó trong hàm dispose() của _TravelPlanPageState.
+
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    margin: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.blue.shade100, width: 2),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Thêm hoạt động cho Ngày ${_tabController.index + 1}", 
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        const SizedBox(height: 10),
+        
+        // 1. Trường Thời gian
+        TextField(
+          controller: _timeController,
+          decoration: InputDecoration(
+            hintText: "Thời gian (hh:mm)",
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _timeController,
-            decoration: InputDecoration(
-              hintText: "Thời gian (hh:mm)",
-              filled: true,
-              fillColor: Colors.grey.shade100,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          keyboardType: TextInputType.datetime,
+        ),
+        const SizedBox(height: 10),
+        
+        // 2. Trường Tên hoạt động
+        TextField(
+          controller: _titleController,
+          decoration: InputDecoration(
+            hintText: "Tên hoạt động",
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+        ),
+        
+        const SizedBox(height: 10),
+        
+        // 3. TRƯỜNG MỚI: Chi tiết hoạt động
+        TextField(
+          controller: _detailController, // <-- Dùng controller mới
+          maxLines: 3, // Cho phép tối đa 3 dòng
+          minLines: 1,
+          decoration: InputDecoration(
+            hintText: "Chi tiết (Địa điểm, ghi chú, ...)",
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+        ),
+        
+        const SizedBox(height: 15),
+        
+        // Nút điều khiển
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _isAddingActivity = false;
+                  _timeController.clear();
+                  _titleController.clear();
+                  _detailController.clear(); // <-- CLEAR CONTROLLER MỚI khi Hủy
+                });
+              }, 
+              child: const Text("Hủy", style: TextStyle(color: Colors.grey))
             ),
-            keyboardType: TextInputType.datetime,
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _titleController,
-            decoration: InputDecoration(
-              hintText: "Tên hoạt động",
-              filled: true,
-              fillColor: Colors.grey.shade100,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              // Đảm bảo hàm _addActivity() đã được cập nhật để lấy _detailController.text
+              onPressed: _addActivity, 
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue, 
+                foregroundColor: Colors.white, 
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+              ), 
+              child: const Text("Thêm")
             ),
-          ),
-          const SizedBox(height: 15),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(onPressed: () {setState(() {_isAddingActivity = false;_timeController.clear();_titleController.clear();});}, child: const Text("Hủy", style: TextStyle(color: Colors.grey))),
-              const SizedBox(width: 8),
-              ElevatedButton(onPressed: _addActivity, style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: const Text("Thêm")),
-            ],
-          )
-        ],
-      ),
-    );
+          ],
+        )
+      ],
+    ),
+  );
+}
+
+  @override
+  void dispose() {
+    _tabController.removeListener(_handleTabChange);
+    _tabController.dispose();
+    _timeController.dispose();
+    _titleController.dispose();
+    super.dispose();
+  }
+  
+  // Xử lý khi đổi tab để tự động tắt chế độ thêm/xóa
+  void _handleTabChange() {
+    setState(() {
+      _isAddingActivity = false;
+      _isDeleteMode = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    // Hiển thị loading nếu chưa tải xong dữ liệu
+    if (_travelPlan.isEmpty && _dayInfo.isNotEmpty) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    
     return Scaffold(
       backgroundColor: Colors.grey.shade200,
       appBar: AppBar(
@@ -711,7 +778,7 @@ void _showDetailPopup(Map<String, dynamic> activity) {
         // Hiển thị 7 tab
         bottom: TabBar(
           controller: _tabController,
-          isScrollable: true, // Cho phép cuộn ngang
+          isScrollable: true, 
           labelColor: Colors.blue,
           unselectedLabelColor: Colors.black,
           indicatorColor: Colors.blue,
@@ -730,8 +797,7 @@ void _showDetailPopup(Map<String, dynamic> activity) {
         children: [
           TabBarView(
             controller: _tabController,
-            // Mỗi tab sẽ gọi _buildDayPlan() để hiển thị hoạt động của ngày hiện tại
-            children: List.generate(_dayActivities.length, (index) => _buildDayPlan()),
+            children: List.generate(_travelPlan.length, (index) => _buildDayPlan()),
           ),
           
           // Footer
@@ -761,7 +827,7 @@ void _showDetailPopup(Map<String, dynamic> activity) {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: Text(
-                        _isAddingActivity ? 'Lưu hoạt động' : '+ Thêm hoạt động cho Day ${_tabController.index + 1}', // Cập nhật text
+                        _isAddingActivity ? 'Lưu hoạt động' : '+ Thêm hoạt động cho Day ${_tabController.index + 1}', 
                         style: const TextStyle(fontSize: 16),
                       ),
                     ),
