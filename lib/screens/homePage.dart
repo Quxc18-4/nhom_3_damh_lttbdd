@@ -5,6 +5,8 @@ import 'package:nhom_3_damh_lttbdd/screens/profileScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/exploreScreen.dart';
 import 'tripPlannerScreen.dart'; // Đảm bảo bạn có file này và class TravelPlanPage
 import 'package:nhom_3_damh_lttbdd/screens/saveScreen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // THÊM: Import Model và Service để truy cập dữ liệu local
 import 'package:nhom_3_damh_lttbdd/model/activity.dart'; 
@@ -21,10 +23,7 @@ const String _ASSET_CAR_RENTAL = 'assets/images/Frame 334.png'; // Placeholder c
 
 class HomePage extends StatefulWidget {
   final String userId;
-  const HomePage({
-    Key? key,
-    required this.userId,
-  }) : super(key: key);
+  const HomePage({Key? key, required this.userId}) : super(key: key);
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -43,6 +42,38 @@ class _HomePageState extends State<HomePage> {
   /*
   final List<Map<String, dynamic>> _dalatActivities = [
     ...
+
+  // --- THÊM CÁC BIẾN STATE ---
+  String _userNickname = ''; // Để lưu nickname
+  String _userAvatarUrl = ''; // Để lưu URL avatar
+  bool _isLoadingUserData = true; // Để kiểm soát trạng thái loading
+
+  // Dữ liệu mẫu cho Lịch trình Đà Lạt
+  final List<Map<String, dynamic>> _dalatActivities = [
+    {
+      "time": "4:30",
+      "title": "Thức dậy",
+      "iconAsset": Icons.wb_sunny_outlined,
+      "iconColor": Colors.amber,
+    },
+    {
+      "time": "5:30",
+      "title": "Săn bình minh/Săn mây",
+      "iconAsset": Icons.cloud_outlined,
+      "iconColor": Colors.blueGrey,
+    },
+    {
+      "time": "7:30",
+      "title": "Ăn sáng",
+      "iconAsset": Icons.restaurant,
+      "iconColor": Colors.lightBlueAccent,
+    },
+    {
+      "time": "8:30",
+      "title": "Cà phê/Chụp ảnh",
+      "iconAsset": Icons.camera_alt_outlined,
+      "iconColor": Colors.brown,
+    },
   ];
   */
 
@@ -57,7 +88,12 @@ class _HomePageState extends State<HomePage> {
 
   // Dữ liệu mẫu cho Tin tức (GIỮ NGUYÊN)
   final List<Map<String, dynamic>> _newsFeed = [
-    {"tag": "#Đà Lạt", "content": "Đà Lạt chào đón tôi bằng không khí se lạnh và những con đèo", "image": "https://images.unsplash.com/photo-1596765798402-421b16c4c0b5?fit=crop&w=400&q=80"},
+    {
+      "tag": "#Đà Lạt",
+      "content": "Đà Lạt chào đón tôi bằng không khí se lạnh và những con đèo",
+      "image":
+          "https://images.unsplash.com/photo-1596765798402-421b16c4c0b5?fit=crop&w=400&q=80",
+    },
   ];
 
   @override
@@ -174,19 +210,28 @@ class _HomePageState extends State<HomePage> {
                 onTap: () async { // Đã THÊM async/await
                   await Navigator.push( 
                     context,
-                    MaterialPageRoute(builder: (context) => const TravelPlanPage()),
+                    MaterialPageRoute(
+                      builder: (context) => const TravelPlanPage(),
+                    ),
                   );
                   // Tải lại dữ liệu sau khi quay về
                   _loadDayActivitiesPreview(); 
                 },
-                child: const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.grey),
+                child: const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 18,
+                  color: Colors.grey,
+                ),
               ),
             ],
           ),
         ),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16.0),
-          child: Text('20/08/2025 - 22/08/2025', style: TextStyle(color: Colors.grey, fontSize: 13)),
+          child: Text(
+            '20/08/2025 - 22/08/2025',
+            style: TextStyle(color: Colors.grey, fontSize: 13),
+          ),
         ),
         const SizedBox(height: 10),
 
@@ -209,9 +254,33 @@ class _HomePageState extends State<HomePage> {
                   padding: EdgeInsets.zero,
                   labelPadding: EdgeInsets.symmetric(horizontal: 8.0),
                   tabs: [
-                    Tab(child: Text('Day 1 - 20/08', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-                    Tab(child: Text('Day 2 - 21/08', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-                    Tab(child: Text('Day 3 - 22/08', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+                    Tab(
+                      child: Text(
+                        'Day 1 - 20/08',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    Tab(
+                      child: Text(
+                        'Day 2 - 21/08',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    Tab(
+                      child: Text(
+                        'Day 3 - 22/08',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -262,6 +331,20 @@ class _HomePageState extends State<HomePage> {
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFFFFE0B2), 
+    // Lấy thời gian hiện tại để chào đúng buổi
+    String greeting;
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      greeting = 'Chào buổi sáng';
+    } else if (hour < 18) {
+      greeting = 'Chào buổi chiều';
+    } else {
+      greeting = 'Chào buổi tối';
+    }
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFE0B2), // 🌟 vàng nhạt
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(24),
           bottomRight: Radius.circular(24),
@@ -392,12 +475,18 @@ class _HomePageState extends State<HomePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Travel Map của bạn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              const Text(
+                'Travel Map của bạn',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
               const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.grey),
             ],
           ),
           const SizedBox(height: 4),
-          const Text('Đã khám phá 8/64 tỉnh thành tại Việt Nam', style: TextStyle(color: Colors.grey, fontSize: 13)),
+          const Text(
+            'Đã khám phá 8/64 tỉnh thành tại Việt Nam',
+            style: TextStyle(color: Colors.grey, fontSize: 13),
+          ),
         ],
       ),
     );
@@ -435,7 +524,13 @@ class _HomePageState extends State<HomePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_newsFeed[0]["tag"].toString(), style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                    Text(
+                      _newsFeed[0]["tag"].toString(),
+                      style: const TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(_newsFeed[0]["content"].toString(), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
                   ],
@@ -462,7 +557,7 @@ class _HomePageState extends State<HomePage> {
           _buildTravelPlanPreview(),
           const SizedBox(height: 20),
           _buildNewsFeedSection(),
-          const SizedBox(height: 40), 
+          const SizedBox(height: 40),
         ],
       ),
     );
