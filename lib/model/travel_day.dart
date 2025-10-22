@@ -2,7 +2,7 @@ import 'activity.dart'; // Import Activity model
 
 class TravelDay {
   final int day;
-  final String date;
+   String date;
   final int tabIndex; // Chỉ số tab (0 đến 6)
   final List<Activity> activities;
 

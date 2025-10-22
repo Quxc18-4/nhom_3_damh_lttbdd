@@ -3,10 +3,8 @@ import 'dart:convert';
 // Cần cập nhật đường dẫn import cho phù hợp với cấu trúc project của bạn
 import '../model/travel_day.dart'; 
 import '../services/local_plan_service.dart';
-import '../services/local_plan_service.dart';
-// Trong lib/screens/tripPlannerScreen.dart
 import 'package:nhom_3_damh_lttbdd/model/activity.dart'; 
-// ...
+
 class TravelPlanPage extends StatefulWidget {
   const TravelPlanPage({super.key});
 
@@ -16,7 +14,6 @@ class TravelPlanPage extends StatefulWidget {
 
 class _TravelPlanPageState extends State<TravelPlanPage>
     with SingleTickerProviderStateMixin {
-  
   // Service để lưu/tải dữ liệu
   final LocalPlanService _localPlanService = LocalPlanService();
 
@@ -28,17 +25,38 @@ class _TravelPlanPageState extends State<TravelPlanPage>
   // Dữ liệu chính: List<TravelDay> được tải từ local
   List<TravelDay> _travelPlan = []; 
 
-  // Dữ liệu ngày và màu sắc hiển thị cho 7 ngày (STATIC DATA)
-  final List<Map<String, dynamic>> _dayInfo = const [
-    {'day': 1, 'date': '20/08', 'mainColor': Color(0xFF9933CC), 'accentColor': Color(0xFFE0B0FF)}, // Tím
-    {'day': 2, 'date': '21/08', 'mainColor': Color(0xFFFF6699), 'accentColor': Color(0xFFFFCCF5)}, // Hồng
-    {'day': 3, 'date': '22/08', 'mainColor': Color(0xFF3399FF), 'accentColor': Color(0xFFB0D5FF)}, // Xanh dương
-    {'day': 4, 'date': '23/08', 'mainColor': Color(0xFF4CAF50), 'accentColor': Color(0xFFC8E6C9)}, // Xanh lá
-    {'day': 5, 'date': '24/08', 'mainColor': Color(0xFFFFC107), 'accentColor': Color(0xFFFFECB3)}, // Vàng
-    {'day': 6, 'date': '25/08', 'mainColor': Color(0xFFE53935), 'accentColor': Color(0xFFFFCDD2)}, // Đỏ
-    {'day': 7, 'date': '26/08', 'mainColor': Color(0xFF00BCD4), 'accentColor': Color(0xFFB2EBF2)}, // Xanh ngọc
-  ];
+  // Ngày bắt đầu (mặc định là hôm nay)
+  DateTime _startDate = DateTime.now();
 
+  // Tạo thông tin ngày động dựa trên _startDate
+  List<Map<String, dynamic>> _generateDayInfo() {
+    List<Map<String, dynamic>> dayInfo = [];
+    for (int i = 0; i < 7; i++) {
+      DateTime date = _startDate.add(Duration(days: i));
+      dayInfo.add({
+        'day': i + 1,
+        'date': '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}',
+        'mainColor': _getColorForDay(i).mainColor,
+        'accentColor': _getColorForDay(i).accentColor,
+      });
+    }
+    return dayInfo;
+  }
+
+  // Ánh xạ màu sắc cho các ngày
+  Map<int, ({Color mainColor, Color accentColor})> _dayColors = {
+    0: (mainColor: Color(0xFF9933CC), accentColor: Color(0xFFE0B0FF)), // Tím
+    1: (mainColor: Color(0xFFFF6699), accentColor: Color(0xFFFFCCF5)), // Hồng
+    2: (mainColor: Color(0xFF3399FF), accentColor: Color(0xFFB0D5FF)), // Xanh dương
+    3: (mainColor: Color(0xFF4CAF50), accentColor: Color(0xFFC8E6C9)), // Xanh lá
+    4: (mainColor: Color(0xFFFFC107), accentColor: Color(0xFFFFECB3)), // Vàng
+    5: (mainColor: Color(0xFFE53935), accentColor: Color(0xFFFFCDD2)), // Đỏ
+    6: (mainColor: Color(0xFF00BCD4), accentColor: Color(0xFFB2EBF2)), // Xanh ngọc
+  };
+
+  ({Color mainColor, Color accentColor}) _getColorForDay(int index) {
+    return _dayColors[index % _dayColors.length]!;
+  }
 
   final TextEditingController _timeController = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
@@ -47,11 +65,27 @@ class _TravelPlanPageState extends State<TravelPlanPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _dayInfo.length, vsync: this);
+    _loadStartDate(); // Tải ngày bắt đầu trước
+    _tabController = TabController(length: 7, vsync: this);
     _tabController.addListener(_handleTabChange);
     _loadTravelPlan(); // Tải dữ liệu từ local
   }
-  
+
+  // Tải ngày bắt đầu từ Local Storage
+  Future<void> _loadStartDate() async {
+    final savedDate = await _localPlanService.loadStartDate();
+    if (savedDate != null) {
+      setState(() {
+        _startDate = savedDate;
+      });
+    }
+  }
+
+  // Lưu ngày bắt đầu vào Local Storage
+  Future<void> _saveStartDate() async {
+    await _localPlanService.saveStartDate(_startDate);
+  }
+
   // --- LOGIC VỀ DỮ LIỆU VÀ LOCAL STORAGE ---
 
   // Khởi tạo mẫu hoạt động đơn giản cho Ngày 1 nếu chưa có dữ liệu
@@ -67,16 +101,17 @@ class _TravelPlanPageState extends State<TravelPlanPage>
   // Tải dữ liệu từ Local Storage
   Future<void> _loadTravelPlan() async {
     final loadedPlan = await _localPlanService.loadAllDays();
+    final dayInfo = _generateDayInfo();
 
     if (loadedPlan.isEmpty) {
       // Nếu không có dữ liệu, tạo cấu trúc 7 ngày rỗng/mẫu ban đầu
-      final initialPlan = List<TravelDay>.generate(_dayInfo.length, (index) {
-        final info = _dayInfo[index];
+      final initialPlan = List<TravelDay>.generate(dayInfo.length, (index) {
+        final info = dayInfo[index];
         return TravelDay(
           day: info['day'] as int,
           date: info['date'] as String,
           tabIndex: index,
-          activities: index == 0 ? _createSampleActivities(info) : [], 
+          activities: index == 0 ? _createSampleActivities(info) : [],
         );
       });
       await _localPlanService.saveAllDays(initialPlan);
@@ -85,10 +120,20 @@ class _TravelPlanPageState extends State<TravelPlanPage>
         _travelPlan = initialPlan;
       });
     } else {
-      // Đã có dữ liệu, sắp xếp và load
-      _sortAllActivities(loadedPlan);
+      // Đã có dữ liệu, tạo lại danh sách với ngày mới dựa trên _startDate
+      final updatedPlan = List<TravelDay>.generate(dayInfo.length, (index) {
+        final info = dayInfo[index];
+        final oldDay = loadedPlan.length > index ? loadedPlan[index] : null;
+        return TravelDay(
+          day: info['day'] as int,
+          date: info['date'] as String,
+          tabIndex: index,
+          activities: oldDay?.activities ?? [], // Giữ nguyên hoạt động cũ
+        );
+      });
+      _sortAllActivities(updatedPlan);
       setState(() {
-        _travelPlan = loadedPlan;
+        _travelPlan = updatedPlan;
       });
     }
   }
@@ -103,7 +148,7 @@ class _TravelPlanPageState extends State<TravelPlanPage>
     if (_tabController.index >= 0 && _tabController.index < _travelPlan.length) {
       return _travelPlan[_tabController.index].activities;
     }
-    return []; 
+    return [];
   }
 
   // Sắp xếp hoạt động cho tất cả các ngày
@@ -126,41 +171,37 @@ class _TravelPlanPageState extends State<TravelPlanPage>
     return hour * 60 + minute;
   }
 
-// Thêm hoạt động vào ngày đang chọn
-void _addActivity() async {
-  final time = _timeController.text.trim();
-  final title = _titleController.text.trim();
-  
-  // 1. LẤY GIÁ TRỊ TỪ CONTROLLER MỚI
-  final detail = _detailController.text.trim(); 
-  
-  if (time.isNotEmpty && title.isNotEmpty) {
-    setState(() {
-      final currentDayIndex = _tabController.index;
-      final selectedDayInfo = _dayInfo[currentDayIndex];
-      
-      final newActivity = Activity(
-        time: time,
-        title: title,
-        icon: Icons.place, 
-        color: selectedDayInfo['accentColor'] as Color, 
-        // 2. SỬ DỤNG GIÁ TRỊ LẤY ĐƯỢC
-        // Nếu trường detail rỗng, lưu là null, nếu không thì lưu chuỗi
-        detail: detail.isEmpty ? null : detail 
-      );
-      
-      _travelPlan[currentDayIndex].activities.add(newActivity);
-      
-      _travelPlan[currentDayIndex].activities.sort((a, b) => _convertTime(a.time).compareTo(_convertTime(b.time)));
-      
-      _isAddingActivity = false;
-      _timeController.clear();
-      _titleController.clear();
-      _detailController.clear(); // 3. CLEAR CONTROLLER MỚI
-    });
-    await _saveTravelPlan(); // LƯU VÀO LOCAL
+  // Thêm hoạt động vào ngày đang chọn
+  void _addActivity() async {
+    final time = _timeController.text.trim();
+    final title = _titleController.text.trim();
+    final detail = _detailController.text.trim(); 
+    
+    if (time.isNotEmpty && title.isNotEmpty) {
+      setState(() {
+        final currentDayIndex = _tabController.index;
+        final selectedDayInfo = _generateDayInfo()[currentDayIndex];
+        
+        final newActivity = Activity(
+          time: time,
+          title: title,
+          icon: Icons.place, 
+          color: selectedDayInfo['accentColor'] as Color, 
+          detail: detail.isEmpty ? null : detail 
+        );
+        
+        _travelPlan[currentDayIndex].activities.add(newActivity);
+        
+        _travelPlan[currentDayIndex].activities.sort((a, b) => _convertTime(a.time).compareTo(_convertTime(b.time)));
+        
+        _isAddingActivity = false;
+        _timeController.clear();
+        _titleController.clear();
+        _detailController.clear();
+      });
+      await _saveTravelPlan(); // LƯU VÀO LOCAL
+    }
   }
-}
 
   // Xóa hoạt động khỏi ngày đang chọn
   void _removeActivity(int index) async {
@@ -217,7 +258,7 @@ void _addActivity() async {
 
   // Hiển thị Popup chi tiết cho MỘT ngày (khi nhấn 'Xem tất cả')
   void _showAllActivitiesForDay(int dayIndex) {
-    final info = _dayInfo[dayIndex];
+    final info = _generateDayInfo()[dayIndex];
     final activities = _travelPlan[dayIndex].activities; 
     
     showModalBottomSheet(
@@ -380,7 +421,7 @@ void _addActivity() async {
 
   // WIDGET: Kế hoạch ngày trong Popup Tổng quan (dùng Model)
   Widget _buildDayPlanInPopup(int dayIndex, String date, Color mainColor) {
-    final info = _dayInfo[dayIndex];
+    final info = _generateDayInfo()[dayIndex];
     final activities = _travelPlan[dayIndex].activities; 
     final accentColor = info['accentColor'] as Color;
     
@@ -443,7 +484,7 @@ void _addActivity() async {
                       const Padding(
                           padding: EdgeInsets.all(8.0),
                           child: Text("Chưa có hoạt động nào.", style: TextStyle(color: Colors.grey)),
-                        ),
+                      ),
                   ],
                 ),
               ),
@@ -506,7 +547,7 @@ void _addActivity() async {
                     child: Column(
                       children: [
                         ...List.generate(_travelPlan.length, (index) {
-                          final info = _dayInfo[index];
+                          final info = _generateDayInfo()[index];
                           return _buildDayPlanInPopup(
                             index, 
                             info['date'] as String, 
@@ -610,7 +651,6 @@ void _addActivity() async {
     );
   }
 
-
   // WIDGET KẾ HOẠCH NGÀY (Sử dụng _getCurrentActivities() và _buildActivityItemFromModel)
   Widget _buildDayPlan() {
     final activities = _getCurrentActivities();
@@ -638,103 +678,99 @@ void _addActivity() async {
   }
   
   // WIDGET FORM THÊM HOẠT ĐỘNG
-Widget _buildAddActivityForm() {
-  // LƯU Ý: Đảm bảo bạn đã khai báo `final TextEditingController _detailController = TextEditingController();`
-  // và dispose nó trong hàm dispose() của _TravelPlanPageState.
-
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    margin: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: Colors.blue.shade100, width: 2),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Thêm hoạt động cho Ngày ${_tabController.index + 1}", 
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 10),
-        
-        // 1. Trường Thời gian
-        TextField(
-          controller: _timeController,
-          decoration: InputDecoration(
-            hintText: "Thời gian (hh:mm)",
-            filled: true,
-            fillColor: Colors.grey.shade100,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+  Widget _buildAddActivityForm() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.shade100, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Thêm hoạt động cho Ngày ${_tabController.index + 1}", 
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
-          keyboardType: TextInputType.datetime,
-        ),
-        const SizedBox(height: 10),
-        
-        // 2. Trường Tên hoạt động
-        TextField(
-          controller: _titleController,
-          decoration: InputDecoration(
-            hintText: "Tên hoạt động",
-            filled: true,
-            fillColor: Colors.grey.shade100,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-        ),
-        
-        const SizedBox(height: 10),
-        
-        // 3. TRƯỜNG MỚI: Chi tiết hoạt động
-        TextField(
-          controller: _detailController, // <-- Dùng controller mới
-          maxLines: 3, // Cho phép tối đa 3 dòng
-          minLines: 1,
-          decoration: InputDecoration(
-            hintText: "Chi tiết (Địa điểm, ghi chú, ...)",
-            filled: true,
-            fillColor: Colors.grey.shade100,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-        ),
-        
-        const SizedBox(height: 15),
-        
-        // Nút điều khiển
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _isAddingActivity = false;
-                  _timeController.clear();
-                  _titleController.clear();
-                  _detailController.clear(); // <-- CLEAR CONTROLLER MỚI khi Hủy
-                });
-              }, 
-              child: const Text("Hủy", style: TextStyle(color: Colors.grey))
+          const SizedBox(height: 10),
+          
+          // 1. Trường Thời gian
+          TextField(
+            controller: _timeController,
+            decoration: InputDecoration(
+              hintText: "Thời gian (hh:mm)",
+              filled: true,
+              fillColor: Colors.grey.shade100,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              // Đảm bảo hàm _addActivity() đã được cập nhật để lấy _detailController.text
-              onPressed: _addActivity, 
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue, 
-                foregroundColor: Colors.white, 
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-              ), 
-              child: const Text("Thêm")
+            keyboardType: TextInputType.datetime,
+          ),
+          const SizedBox(height: 10),
+          
+          // 2. Trường Tên hoạt động
+          TextField(
+            controller: _titleController,
+            decoration: InputDecoration(
+              hintText: "Tên hoạt động",
+              filled: true,
+              fillColor: Colors.grey.shade100,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
-          ],
-        )
-      ],
-    ),
-  );
-}
+          ),
+          
+          const SizedBox(height: 10),
+          
+          // 3. TRƯỜNG MỚI: Chi tiết hoạt động
+          TextField(
+            controller: _detailController,
+            maxLines: 3,
+            minLines: 1,
+            decoration: InputDecoration(
+              hintText: "Chi tiết (Địa điểm, ghi chú, ...)",
+              filled: true,
+              fillColor: Colors.grey.shade100,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+          ),
+          
+          const SizedBox(height: 15),
+          
+          // Nút điều khiển
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _isAddingActivity = false;
+                    _timeController.clear();
+                    _titleController.clear();
+                    _detailController.clear();
+                  });
+                }, 
+                child: const Text("Hủy", style: TextStyle(color: Colors.grey))
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _addActivity, 
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue, 
+                  foregroundColor: Colors.white, 
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                ), 
+                child: const Text("Thêm")
+              ),
+            ],
+          )
+        ],
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -742,6 +778,7 @@ Widget _buildAddActivityForm() {
     _tabController.dispose();
     _timeController.dispose();
     _titleController.dispose();
+    _detailController.dispose();
     super.dispose();
   }
   
@@ -756,7 +793,7 @@ Widget _buildAddActivityForm() {
   @override
   Widget build(BuildContext context) {
     // Hiển thị loading nếu chưa tải xong dữ liệu
-    if (_travelPlan.isEmpty && _dayInfo.isNotEmpty) {
+    if (_travelPlan.isEmpty && _generateDayInfo().isNotEmpty) {
       return const Scaffold(
         backgroundColor: Colors.white,
         body: Center(child: CircularProgressIndicator()),
@@ -772,6 +809,11 @@ Widget _buildAddActivityForm() {
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios), color: Colors.black, onPressed: () => Navigator.pop(context)),
         title: const Text('Travel Plan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.calendar_today, color: Colors.black),
+            tooltip: 'Chọn ngày bắt đầu',
+            onPressed: () => _selectStartDate(context),
+          ),
           IconButton(icon: const Icon(Icons.share, color: Colors.black), onPressed: _showSharePopup),
           IconButton(icon: const Icon(Icons.download_outlined, color: Colors.black), onPressed: _showSharePopup)
         ],
@@ -782,7 +824,7 @@ Widget _buildAddActivityForm() {
           labelColor: Colors.blue,
           unselectedLabelColor: Colors.black,
           indicatorColor: Colors.blue,
-          tabs: _dayInfo.map((info) => Tab(
+          tabs: _generateDayInfo().map((info) => Tab(
             child: Column(
               children: [
                 Text('Day ${info['day']}', style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -856,5 +898,30 @@ Widget _buildAddActivityForm() {
         ],
       ),
     );
+  }
+
+  // Hiển thị DatePicker để chọn ngày bắt đầu
+  Future<void> _selectStartDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      helpText: 'Chọn ngày bắt đầu chuyến đi',
+      confirmText: 'Xác nhận',
+      cancelText: 'Hủy',
+    );
+    if (picked != null && picked != _startDate) {
+      setState(() {
+        _startDate = picked;
+        // Cập nhật ngày tháng trong _travelPlan
+        final dayInfo = _generateDayInfo();
+        for (int i = 0; i < _travelPlan.length; i++) {
+          _travelPlan[i].date = dayInfo[i]['date'] as String;
+        }
+      });
+      await _saveTravelPlan(); // Lưu kế hoạch với ngày mới
+      await _saveStartDate(); // Lưu ngày bắt đầu mới
+    }
   }
 }
