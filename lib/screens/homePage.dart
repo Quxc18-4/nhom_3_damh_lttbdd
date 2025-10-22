@@ -12,7 +12,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:nhom_3_damh_lttbdd/model/activity.dart'; 
 import 'package:nhom_3_damh_lttbdd/services/local_plan_service.dart'; 
 
-
 // Giả định các đường dẫn assets (GIỮ NGUYÊN)
 const String _ASSET_AVATAR = 'assets/images/image 8.png';
 const String _ASSET_HOTEL = 'assets/images/Frame 332.png';
@@ -32,50 +31,14 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
   
-  // Service để tải dữ liệu (GIỮ NGUYÊN)
+  // Service để tải dữ liệu
   final LocalPlanService _localPlanService = LocalPlanService();
 
-  // ĐÃ SỬA: Dữ liệu Preview 3 ngày đầu (khởi tạo 3 list rỗng)
+  // ĐÃ SỬA: Dữ liệu Preview 3 ngày đầu
   List<List<Activity>> _dayActivitiesPreview = List.generate(3, (index) => []); 
-
-  // Dữ liệu mẫu tĩnh đã bị loại bỏ (GIỮ NGUYÊN COMMENT)
-  /*
-  final List<Map<String, dynamic>> _dalatActivities = [
-    ...
-
-  // --- THÊM CÁC BIẾN STATE ---
-  String _userNickname = ''; // Để lưu nickname
-  String _userAvatarUrl = ''; // Để lưu URL avatar
+  DateTime _startDate = DateTime.now(); // Thêm biến ngày bắt đầu
+  String _userNickname = ''; // Thêm biến để lưu nickname
   bool _isLoadingUserData = true; // Để kiểm soát trạng thái loading
-
-  // Dữ liệu mẫu cho Lịch trình Đà Lạt
-  final List<Map<String, dynamic>> _dalatActivities = [
-    {
-      "time": "4:30",
-      "title": "Thức dậy",
-      "iconAsset": Icons.wb_sunny_outlined,
-      "iconColor": Colors.amber,
-    },
-    {
-      "time": "5:30",
-      "title": "Săn bình minh/Săn mây",
-      "iconAsset": Icons.cloud_outlined,
-      "iconColor": Colors.blueGrey,
-    },
-    {
-      "time": "7:30",
-      "title": "Ăn sáng",
-      "iconAsset": Icons.restaurant,
-      "iconColor": Colors.lightBlueAccent,
-    },
-    {
-      "time": "8:30",
-      "title": "Cà phê/Chụp ảnh",
-      "iconAsset": Icons.camera_alt_outlined,
-      "iconColor": Colors.brown,
-    },
-  ];
-  */
 
   // Dữ liệu mẫu cho các dịch vụ (GIỮ NGUYÊN)
   final List<Map<String, dynamic>> _services = [
@@ -91,15 +54,47 @@ class _HomePageState extends State<HomePage> {
     {
       "tag": "#Đà Lạt",
       "content": "Đà Lạt chào đón tôi bằng không khí se lạnh và những con đèo",
-      "image":
-          "https://images.unsplash.com/photo-1596765798402-421b16c4c0b5?fit=crop&w=400&q=80",
+      "image": "https://images.unsplash.com/photo-1596765798402-421b16c4c0b5?fit=crop&w=400&q=80",
     },
   ];
 
   @override
   void initState() {
     super.initState();
-    _loadDayActivitiesPreview(); // CẬP NHẬT: Tải dữ liệu 3 ngày khi khởi tạo
+    _loadStartDate(); // Tải ngày bắt đầu
+    _loadDayActivitiesPreview(); // Tải dữ liệu 3 ngày khi khởi tạo
+    _loadUserData(); // Tải dữ liệu người dùng
+  }
+
+  // Tải ngày bắt đầu từ Local Storage
+  Future<void> _loadStartDate() async {
+    final savedDate = await _localPlanService.loadStartDate();
+    if (savedDate != null) {
+      setState(() {
+        _startDate = savedDate;
+      });
+    }
+  }
+
+  // Tải dữ liệu người dùng từ Firebase
+  Future<void> _loadUserData() async {
+    setState(() => _isLoadingUserData = true);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (userDoc.exists) {
+          setState(() {
+            _userNickname = userDoc.data()?['name'] ?? 'Mydei'; // Lấy nickname từ Firestore
+            _isLoadingUserData = false;
+          });
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _isLoadingUserData = false;
+      });
+    }
   }
 
   // CẬP NHẬT: Hàm tải hoạt động cho 3 ngày đầu tiên từ Local Storage
@@ -121,7 +116,7 @@ class _HomePageState extends State<HomePage> {
         _dayActivitiesPreview = tempActivities; 
       });
     } else {
-       setState(() {
+      setState(() {
         // Đặt lại về 3 list rỗng nếu chưa có data
         _dayActivitiesPreview = List.generate(3, (index) => []);
       });
@@ -191,12 +186,16 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-
   Widget _buildTravelPlanPreview() {
+    // Tính ngày cho 3 ngày đầu dựa trên _startDate
+    final day1 = _startDate;
+    final day2 = _startDate.add(const Duration(days: 1));
+    final day3 = _startDate.add(const Duration(days: 2));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Tiêu đề Travel Plan (GIỮ NGUYÊN)
+        // Tiêu đề Travel Plan
         Padding(
           padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 4.0),
           child: Row(
@@ -207,15 +206,16 @@ class _HomePageState extends State<HomePage> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
               GestureDetector(
-                onTap: () async { // Đã THÊM async/await
-                  await Navigator.push( 
+                onTap: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => const TravelPlanPage(),
                     ),
                   );
                   // Tải lại dữ liệu sau khi quay về
-                  _loadDayActivitiesPreview(); 
+                  _loadStartDate(); // Cập nhật ngày
+                  _loadDayActivitiesPreview();
                 },
                 child: const Icon(
                   Icons.arrow_forward_ios,
@@ -226,25 +226,26 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16.0),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Text(
-            '20/08/2025 - 22/08/2025',
-            style: TextStyle(color: Colors.grey, fontSize: 13),
+            '${day1.day.toString().padLeft(2, '0')}/${day1.month.toString().padLeft(2, '0')}/${day1.year} - '
+            '${day3.day.toString().padLeft(2, '0')}/${day3.month.toString().padLeft(2, '0')}/${day3.year}',
+            style: const TextStyle(color: Colors.grey, fontSize: 13),
           ),
         ),
         const SizedBox(height: 10),
 
-        // Tabs (GIỮ NGUYÊN)
+        // Tabs
         DefaultTabController(
           length: 3,
           initialIndex: 0,
           child: Column(
             children: [
               Container(
-                color: Colors.white, // Nền trắng cho TabBar
+                color: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                child: const TabBar( 
+                child: TabBar(
                   isScrollable: true,
                   labelColor: Colors.black,
                   unselectedLabelColor: Colors.grey,
@@ -252,12 +253,12 @@ class _HomePageState extends State<HomePage> {
                   indicatorWeight: 3,
                   indicatorSize: TabBarIndicatorSize.tab,
                   padding: EdgeInsets.zero,
-                  labelPadding: EdgeInsets.symmetric(horizontal: 8.0),
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 8.0),
                   tabs: [
                     Tab(
                       child: Text(
-                        'Day 1 - 20/08',
-                        style: TextStyle(
+                        'Day 1 - ${day1.day.toString().padLeft(2, '0')}/${day1.month.toString().padLeft(2, '0')}',
+                        style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
                         ),
@@ -265,8 +266,8 @@ class _HomePageState extends State<HomePage> {
                     ),
                     Tab(
                       child: Text(
-                        'Day 2 - 21/08',
-                        style: TextStyle(
+                        'Day 2 - ${day2.day.toString().padLeft(2, '0')}/${day2.month.toString().padLeft(2, '0')}',
+                        style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
                         ),
@@ -274,8 +275,8 @@ class _HomePageState extends State<HomePage> {
                     ),
                     Tab(
                       child: Text(
-                        'Day 3 - 22/08',
-                        style: TextStyle(
+                        'Day 3 - ${day3.day.toString().padLeft(2, '0')}/${day3.month.toString().padLeft(2, '0')}',
+                        style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
                         ),
@@ -285,7 +286,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               
-              // Danh sách hoạt động (Đã sửa để hiển thị 3 ngày động)
+              // Danh sách hoạt động
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16.0),
                 decoration: const BoxDecoration(
@@ -296,24 +297,22 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
                 child: SizedBox(
-                  height: 180, // Chiều cao cố định
+                  height: 180,
                   child: TabBarView(
                     physics: const NeverScrollableScrollPhysics(),
-                    children: List.generate(3, (dayIndex) { // Lặp qua 3 Tab
-                          final activities = _dayActivitiesPreview[dayIndex];
-                          
-                          if (activities.isEmpty) {
-                            return Center(child: Text('Chưa có hoạt động nào cho Day ${dayIndex + 1}'));
-                          }
-                          
-                          return ListView.builder(
-                            padding: const EdgeInsets.all(8.0),
-                            itemCount: activities.length,
-                            itemBuilder: (context, index) {
-                              return _buildActivityItem(activities[index]); // Dùng dữ liệu ĐỘNG
-                            },
-                          );
-                      }),
+                    children: List.generate(3, (dayIndex) {
+                      final activities = _dayActivitiesPreview[dayIndex];
+                      if (activities.isEmpty) {
+                        return Center(child: Text('Chưa có hoạt động nào cho Day ${dayIndex + 1}'));
+                      }
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(8.0),
+                        itemCount: activities.length,
+                        itemBuilder: (context, index) {
+                          return _buildActivityItem(activities[index]);
+                        },
+                      );
+                    }),
                   ),
                 ),
               ),
@@ -324,13 +323,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-
   // 1. Widget Header tùy chỉnh
   Widget _buildCustomHeader() {
-    // GIỮ NGUYÊN
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFFFE0B2), 
     // Lấy thời gian hiện tại để chào đúng buổi
     String greeting;
     final hour = DateTime.now().hour;
@@ -358,20 +352,40 @@ class _HomePageState extends State<HomePage> {
             children: [
               const Icon(Icons.calendar_month, size: 20, color: Colors.black54),
               const SizedBox(width: 8),
-              Text('Thứ Bảy, 10 Tháng 5 2025', style: TextStyle(color: Colors.grey[700], fontSize: 14)),
+              // Cập nhật ngày tháng hiện tại (22/10/2025, Thứ Tư)
+              Text('Thứ Tư, 22 Tháng 10 2025', style: TextStyle(color: Colors.grey[700], fontSize: 14)),
               const Spacer(),
-              IconButton(icon: const Icon(Icons.qr_code_scanner_outlined, color: Colors.black), onPressed: () {}, padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
-              IconButton(icon: const Icon(Icons.notifications_none, color: Colors.black), onPressed: () {}, padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
+              IconButton(
+                icon: const Icon(Icons.qr_code_scanner_outlined, color: Colors.black),
+                onPressed: () {},
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+              IconButton(
+                icon: const Icon(Icons.notifications_none, color: Colors.black),
+                onPressed: () {},
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          Row( // Avatar + chào buổi sáng
+          Row( // Avatar + chào buổi
             children: [
               ClipOval(
-                child: Image.asset(_ASSET_AVATAR, width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const CircleAvatar(radius: 20, child: Icon(Icons.person))),
+                child: Image.asset(
+                  _ASSET_AVATAR,
+                  width: 40,
+                  height: 40,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => const CircleAvatar(radius: 20, child: Icon(Icons.person)),
+                ),
               ),
               const SizedBox(width: 10),
-              const Text('Chào buổi sáng, Mydei!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFFFF9800))),
+              Text(
+                '$greeting, ${_userNickname.isNotEmpty ? _userNickname : "Mydei"}!',
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFFFF9800)),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -402,25 +416,21 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildSuggestionChip(String text, Color bgColor) {
-    // GIỮ NGUYÊN
+  // Hàm _buildSuggestionChip (giả định bạn đã định nghĩa)
+  Widget _buildSuggestionChip(String label, Color color) {
     return Container(
       margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
+        color: color,
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-      ),
+      child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 14)),
     );
   }
   
   // Widget Dịch vụ (sử dụng asset placeholder)
   Widget _buildServiceSection() {
-    // GIỮ NGUYÊN
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -463,10 +473,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-
   // Widget Travel Map
   Widget _buildTravelMapSection() {
-    // GIỮ NGUYÊN
     return Padding(
       padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 4.0),
       child: Column(
@@ -494,7 +502,6 @@ class _HomePageState extends State<HomePage> {
 
   // Widget News Feed
   Widget _buildNewsFeedSection() {
-    // GIỮ NGUYÊN
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -515,7 +522,7 @@ class _HomePageState extends State<HomePage> {
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
           child: Row(
             children: [
-              ClipRRect( // Ảnh
+              ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(_newsFeed[0]["image"].toString(), width: 60, height: 60, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: 60, height: 60, color: Colors.grey.shade300)),
               ),
@@ -545,7 +552,6 @@ class _HomePageState extends State<HomePage> {
 
   // TỔNG HỢP NỘI DUNG HOME PAGE
   Widget _buildHomeContent() {
-    // GIỮ NGUYÊN
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -607,12 +613,10 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // GIỮ NGUYÊN
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(45.0),
-
         child: AppBar(
           title: Text(_getAppBarTitle(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           centerTitle: true,
