@@ -9,6 +9,7 @@ import 'package:google_sign_in/google_sign_in.dart'; // ✅ Cần cho Google Sig
 import 'package:nhom_3_damh_lttbdd/screens/homePage.dart';
 import 'package:nhom_3_damh_lttbdd/screens/registerScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/forgotPasswordScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/adminDashboardRequestView.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -45,6 +46,50 @@ class _LoginScreenState extends State<LoginScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _navigateAfterLogin(User user) async {
+    String? userRank;
+    try {
+      // Lấy document của user từ Firestore
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (userDoc.exists) {
+        // Đọc trường userRank (nếu có)
+        userRank =
+            (userDoc.data() as Map<String, dynamic>)['userRank'] as String?;
+      }
+    } catch (e) {
+      print("Lỗi khi đọc userRank: $e");
+      // Bỏ qua lỗi đọc rank, coi như user thường
+    }
+
+    // Ẩn loading (nếu đang hiển thị) - Di chuyển _hideLoading ra khỏi các hàm login
+    // _hideLoading(); // <-- Xóa _hideLoading ở cuối các hàm _loginUser, _signInWithFacebook, _signInWithGoogle
+
+    if (!mounted) return; // Kiểm tra mounted trước khi điều hướng
+
+    // Điều hướng dựa trên userRank
+    if (userRank == 'Admin') {
+      print("User is Admin, navigating to Admin Dashboard.");
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => AdminDashBoardRequestView(userId: user.uid),
+        ),
+        (Route<dynamic> route) => false,
+      );
+    } else {
+      print("User is not Admin, navigating to Home Page.");
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => HomePage(userId: user.uid)),
+        (Route<dynamic> route) => false,
+      );
+    }
+  }
+
   // =========================================================================
   // 1. HÀM ĐĂNG NHẬP BẰNG EMAIL/PASSWORD
   // =========================================================================
@@ -66,13 +111,8 @@ class _LoginScreenState extends State<LoginScreen> {
       final User? user = userCredential.user;
 
       if (user != null) {
-        _hideLoading();
         // 3. Đăng nhập thành công, lấy userID và chuyển hướng
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => HomePage(userId: user.uid)),
-          (Route<dynamic> route) => false,
-        );
+        await _navigateAfterLogin(user);
       }
     } on FirebaseAuthException catch (e) {
       _hideLoading();
@@ -146,11 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
           // 4. Xử lý sau khi thành công
           _hideLoading();
           _showSnackBar('Đăng nhập bằng Facebook thành công!');
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => HomePage(userId: user.uid)),
-            (Route<dynamic> route) => false,
-          );
+          await _navigateAfterLogin(user);
         }
       } else if (result.status == LoginStatus.cancelled) {
         _hideLoading();
@@ -244,11 +280,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _hideLoading();
         if (mounted) {
           // Thêm kiểm tra `mounted` để đảm bảo an toàn
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => HomePage(userId: user.uid)),
-            (Route<dynamic> route) => false,
-          );
+          await _navigateAfterLogin(user);
         }
       }
     } catch (e) {
