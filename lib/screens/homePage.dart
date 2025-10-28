@@ -187,141 +187,152 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildTravelPlanPreview() {
-    // Tính ngày cho 3 ngày đầu dựa trên _startDate
-    final day1 = _startDate;
-    final day2 = _startDate.add(const Duration(days: 1));
-    final day3 = _startDate.add(const Duration(days: 2));
+  // Tính ngày cho 3 ngày đầu dựa trên _startDate
+  final day1 = _startDate;
+  final day2 = _startDate.add(const Duration(days: 1));
+  final day3 = _startDate.add(const Duration(days: 2));
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Tiêu đề Travel Plan
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 4.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Travel Plan Đà Lạt của bạn',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // Tiêu đề Travel Plan
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 4.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Travel Plan Đà Lạt của bạn',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            GestureDetector(
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const TravelPlanPage(),
+                  ),
+                );
+                // Tải lại dữ liệu sau khi quay về
+                _loadStartDate();
+                _loadDayActivitiesPreview();
+              },
+              child: const Icon(
+                Icons.arrow_forward_ios,
+                size: 18,
+                color: Colors.grey,
               ),
-              GestureDetector(
-                onTap: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const TravelPlanPage(),
-                    ),
-                  );
-                  // Tải lại dữ liệu sau khi quay về
-                  _loadStartDate(); // Cập nhật ngày
-                  _loadDayActivitiesPreview();
-                },
-                child: const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 18,
-                  color: Colors.grey,
+            ),
+          ],
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: Text(
+          '${day1.day.toString().padLeft(2, '0')}/${day1.month.toString().padLeft(2, '0')}/${day1.year} - '
+          '${day3.day.toString().padLeft(2, '0')}/${day3.month.toString().padLeft(2, '0')}/${day3.year}',
+          style: const TextStyle(color: Colors.grey, fontSize: 13),
+        ),
+      ),
+      const SizedBox(height: 6), // giảm khoảng cách cho sát hơn
+
+      // Tabs
+      DefaultTabController(
+        length: 3,
+        initialIndex: 0,
+        child: Column(
+          children: [
+            // --- Thanh tab trên ---
+           Container(
+              padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(40), // bo elip thanh nền
                 ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Text(
-            '${day1.day.toString().padLeft(2, '0')}/${day1.month.toString().padLeft(2, '0')}/${day1.year} - '
-            '${day3.day.toString().padLeft(2, '0')}/${day3.month.toString().padLeft(2, '0')}/${day3.year}',
-            style: const TextStyle(color: Colors.grey, fontSize: 13),
-          ),
-        ),
-        const SizedBox(height: 10),
-
-        // Tabs
-        DefaultTabController(
-          length: 3,
-          initialIndex: 0,
-          child: Column(
-            children: [
-              Container(
-                color: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
                 child: TabBar(
                   isScrollable: true,
-                  labelColor: Colors.black,
-                  unselectedLabelColor: Colors.grey,
-                  indicatorColor: Colors.blue,
-                  indicatorWeight: 3,
-                  indicatorSize: TabBarIndicatorSize.tab,
+                  tabAlignment: TabAlignment.start, 
                   padding: EdgeInsets.zero,
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  labelColor: Colors.blue.shade700,
+                  unselectedLabelColor: Colors.grey.shade800,
+                  indicator: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(30), // bo tròn đều kiểu elip
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                   tabs: [
                     Tab(
                       child: Text(
                         'Day 1 - ${day1.day.toString().padLeft(2, '0')}/${day1.month.toString().padLeft(2, '0')}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                     ),
                     Tab(
                       child: Text(
                         'Day 2 - ${day2.day.toString().padLeft(2, '0')}/${day2.month.toString().padLeft(2, '0')}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                     ),
                     Tab(
                       child: Text(
                         'Day 3 - ${day3.day.toString().padLeft(2, '0')}/${day3.month.toString().padLeft(2, '0')}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                     ),
                   ],
                 ),
               ),
-              
-              // Danh sách hoạt động
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16.0),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(12),
-                    bottomRight: Radius.circular(12),
-                  ),
-                ),
-                child: SizedBox(
-                  height: 180,
-                  child: TabBarView(
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: List.generate(3, (dayIndex) {
-                      final activities = _dayActivitiesPreview[dayIndex];
-                      if (activities.isEmpty) {
-                        return Center(child: Text('Chưa có hoạt động nào cho Day ${dayIndex + 1}'));
-                      }
-                      return ListView.builder(
-                        padding: const EdgeInsets.all(8.0),
-                        itemCount: activities.length,
-                        itemBuilder: (context, index) {
-                          return _buildActivityItem(activities[index]);
-                        },
-                      );
-                    }),
-                  ),
+            ),
+
+            // --- Danh sách hoạt động ---
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16.0),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
                 ),
               ),
-            ],
-          ),
+              child: SizedBox(
+                height: 180,
+                child: TabBarView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: List.generate(3, (dayIndex) {
+                    final activities = _dayActivitiesPreview[dayIndex];
+                    if (activities.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'Chưa có hoạt động nào cho Day ${dayIndex + 1}',
+                        ),
+                      );
+                    }
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(8.0),
+                      itemCount: activities.length,
+                      itemBuilder: (context, index) {
+                        return _buildActivityItem(activities[index]);
+                      },
+                    );
+                  }),
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 
   // 1. Widget Header tùy chỉnh
   Widget _buildCustomHeader() {
