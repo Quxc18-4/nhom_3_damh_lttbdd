@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Vẫn cần cho hàm init service
 import 'package:collection/collection.dart'; // Vẫn cần cho hàm init service
+import 'package:nhom_3_damh_lttbdd/screens/worldMapScreen.dart';
 
 // Imports các file mới
 import 'journey_map_service.dart';
@@ -13,7 +14,7 @@ import 'journey_map_widgets.dart';
 
 class JourneyMapScreen extends StatefulWidget {
   final String userId;
-  const JourneyMapScreen({Key? key, required this.userId}) : super(key: key);
+  const JourneyMapScreen({super.key, required this.userId});
 
   @override
   State<JourneyMapScreen> createState() => _JourneyMapScreenState();
@@ -40,8 +41,14 @@ class _JourneyMapScreenState extends State<JourneyMapScreen> {
 
   // === HÀM XỬ LÝ SỰ KIỆN (GIỮ LẠI) ===
   void _navigateToOSM() {
-    print("Đang chuẩn bị mở OpenStreetMap...");
-    // TODO: Cài đặt package `url_launcher`
+    print("Điều hướng đến WorldMapScreen...");
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        // Điều hướng sang màn hình mới và truyền userId
+        builder: (context) => WorldMapScreen(userId: widget.userId),
+      ),
+    );
   }
 
   void _savePrivateLocation() {
@@ -101,7 +108,7 @@ class _JourneyMapScreenState extends State<JourneyMapScreen> {
     const double fillOpacity = 0.8;
 
     for (String provinceId in provinceIdsToColor) {
-      final pattern = RegExp('(<path[^>]*id="$provinceId"[^>]*?)(\/?>)');
+      final pattern = RegExp('(<path[^>]*id="$provinceId"[^>]*?)(/?>)');
       coloredSvg = coloredSvg.replaceFirstMapped(pattern, (match) {
         String pathTag = match.group(1)!;
         String closing = match.group(2)!;
