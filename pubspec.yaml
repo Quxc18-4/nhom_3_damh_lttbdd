@@ -47,6 +47,8 @@ dependencies:
   google_fonts: ^6.3.2
   shared_preferences: ^2.5.3 
   google_sign_in: ^6.2.0    
+  firebase_storage: ^13.0.3
+  image_picker: ^1.2.0
   flutter_svg: ^2.2.1
   flutter_expandable_fab: ^2.5.2
   flutter_map: ^8.2.2
