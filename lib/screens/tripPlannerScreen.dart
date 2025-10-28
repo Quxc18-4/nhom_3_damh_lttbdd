@@ -824,6 +824,8 @@ class _TravelPlanPageState extends State<TravelPlanPage>
           labelColor: Colors.blue,
           unselectedLabelColor: Colors.black,
           indicatorColor: Colors.blue,
+          padding: EdgeInsets.zero,
+          tabAlignment: TabAlignment.start,
           tabs: _generateDayInfo().map((info) => Tab(
             child: Column(
               children: [
