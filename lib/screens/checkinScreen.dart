@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_storage/firebase_storage.dart'; // Giữ lại cho mục đích tham khảo, nhưng không dùng
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+// ⚡️ IMPORT CLOUDINARY SERVICE
+import 'package:nhom_3_damh_lttbdd/services/cloudinary_service.dart';
+
 
 // =======================================================
 // DỮ LIỆU ẢO (Dùng thay cho Place Model/API)
@@ -40,6 +43,9 @@ class CheckinScreen extends StatefulWidget {
 }
 
 class _CheckinScreenState extends State<CheckinScreen> {
+  // ⚡️ KHỞI TẠO CLOUDINARY SERVICE
+  final CloudinaryService _cloudinaryService = CloudinaryService();
+
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _commentController = TextEditingController();
   final TextEditingController _hashtagController = TextEditingController();
@@ -59,14 +65,22 @@ class _CheckinScreenState extends State<CheckinScreen> {
     super.dispose();
   }
 
+  // Hàm tiện ích
+  void _showSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+
   // =======================================================
-  // HÀM XỬ LÝ ẢNH CỤC BỘ (THƯ VIỆN/CHỤP)
+  // HÀM XỬ LÝ ẢNH CỤC BỘ (THƯ VIỆN/CHỤP) - Giữ nguyên logic chọn ảnh
   // =======================================================
 
   Future<void> _pickImage(ImageSource source) async {
     if (_imagePaths.length >= 10) {
       _showSnackBar('Chỉ được chọn tối đa 10 ảnh/bài viết.');
-      Navigator.pop(context); // Đóng dialog nếu đã đầy
+      Navigator.pop(context);
       return;
     }
 
@@ -76,13 +90,13 @@ class _CheckinScreenState extends State<CheckinScreen> {
         _imagePaths.add(image.path); // LƯU ĐƯỜNG DẪN CỤC BỘ
       });
     }
-    // Sửa lỗi tiềm ẩn: Chỉ pop nếu dialog còn mở
     if (Navigator.canPop(context)) {
-       Navigator.pop(context); // Đóng dialog chọn nguồn
+      Navigator.pop(context); // Đóng dialog chọn nguồn
     }
   }
 
   void _showImageSourceDialog() {
+    // Logic của BottomSheet giữ nguyên
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -130,7 +144,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Hủy'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey[200], // Màu xám nhạt như thiết kế
+                  backgroundColor: Colors.grey[200],
                   foregroundColor: Colors.black87,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -167,7 +181,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
               final String url = urlController.text.trim();
               if ((url.startsWith('http') || url.startsWith('https')) && _imagePaths.length < 10) {
                 setState(() {
-                  _imagePaths.add(url); // LƯU URL MẠNG TRỰC TIẾP
+                  _imagePaths.add(url);
                 });
                 Navigator.pop(context);
               } else {
@@ -182,9 +196,147 @@ class _CheckinScreenState extends State<CheckinScreen> {
   }
 
   // =======================================================
-  // HÀM XỬ LÝ ĐỊA ĐIỂM (Giữ nguyên)
+  // HÀM TẢI ẢNH LÊN (THAY THẾ FIREBASE STORAGE BẰNG CLOUDINARY)
   // =======================================================
 
+  Future<String?> _uploadLocalFile(String path) async {
+    // Nếu là URL mạng, không cần upload
+    if (path.startsWith('http') || path.startsWith('https')) {
+      return path;
+    }
+
+    File file = File(path);
+    // ⚡️ GỌI DỊCH VỤ CLOUDINARY
+    try {
+      String? uploadedUrl = await _cloudinaryService.uploadImageToCloudinary(file);
+      return uploadedUrl;
+    } catch (e) {
+      print("Lỗi tải ảnh lên Cloudinary: $e");
+      return null;
+    }
+  }
+
+  // ===================================================================
+  // HÀM _submitReview (Đã thêm lại reviewId)
+  // ===================================================================
+  Future<void> _submitReview() async {
+    if (_titleController.text.isEmpty || _commentController.text.isEmpty || _selectedPlace == null) {
+      _showSnackBar('Vui lòng nhập Tiêu đề, Nội dung và Chọn địa điểm.');
+      return;
+    }
+    if (_imagePaths.isEmpty) {
+      _showSnackBar('Vui lòng thêm ít nhất một ảnh.');
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final reviewsCollection = FirebaseFirestore.instance.collection('reviews');
+      final newDoc = reviewsCollection.doc();
+      final reviewId = newDoc.id; // ✅ ĐÃ BỎ COMMENT VÀ SỬ DỤNG REVIEW ID
+
+      // 1. Tải ảnh (chỉ tải ảnh cục bộ, giữ nguyên URL mạng)
+      List<String> finalImageUrls = [];
+      for (int i = 0; i < _imagePaths.length; i++) {
+        // Chỉ truyền path. Hàm _uploadLocalFile đã được sửa để chỉ dùng path.
+        final url = await _uploadLocalFile(_imagePaths[i]);
+        if (url != null) {
+          finalImageUrls.add(url);
+        }
+      }
+
+      // ⚡️ CHỈ THẤT BẠI NẾU KHÔNG CÓ URL NÀO HỢP LỆ (Cả local upload và network URL)
+      if (finalImageUrls.isEmpty) {
+        _showSnackBar('Không có ảnh hợp lệ nào được tải lên hoặc tìm thấy.');
+        if (mounted) {
+          setState(() { _isSaving = false; });
+        }
+        return;
+      }
+
+      // 2. Chuẩn bị dữ liệu Firestore
+      final reviewData = {
+        'userId': widget.currentUserId,
+        'placeId': _selectedPlace!.id,
+        'rating': 5,
+        'comment': _commentController.text.trim(),
+        'title': _titleController.text.trim(),
+        'imageUrls': finalImageUrls,
+        'hashtags': _hashtags,
+        'createdAt': FieldValue.serverTimestamp(),
+        'likeCount': 0,
+        'commentCount': 0,
+      };
+
+      await newDoc.set(reviewData);
+
+      _showSnackBar('Đăng bài check-in thành công!');
+      Navigator.pop(context);
+
+    } catch (e) {
+      _showSnackBar('Lỗi khi đăng bài: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  // =======================================================
+  // CÁC WIDGET PHỤ (Giữ nguyên)
+  // =======================================================
+
+  Widget _buildImageItem(String path, VoidCallback onRemove) {
+    bool isNetwork = path.startsWith('http') || path.startsWith('https');
+    ImageProvider imageProvider;
+
+    if (isNetwork) {
+      imageProvider = NetworkImage(path);
+    } else {
+      imageProvider = FileImage(File(path));
+    }
+
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 8.0),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image(
+              image: imageProvider,
+              width: 100,
+              height: 100,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                  width: 100, height: 100, color: Colors.grey[200], child: const Center(child: Icon(Icons.broken_image, color: Colors.grey))),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 4,
+          top: 4,
+          child: GestureDetector(
+            onTap: onRemove,
+            child: const CircleAvatar(
+              radius: 10,
+              backgroundColor: Colors.black54,
+              child: Icon(Icons.close, size: 12, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- CÁC WIDGET UI KHÁC GIỮ NGUYÊN (build, buildImageSection, buildJourneyContent, buildPlaceSection, buildHashtagSection, buildPrivacySection) ---
+  // ... (Phần còn lại của _CheckinScreenState và _PlacePickerModal)
+
+  // Hàm xử lý địa điểm
   void _showPlacePickerDialog() {
     showModalBottomSheet(
       context: context,
@@ -202,10 +354,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
     );
   }
 
-  // =======================================================
-  // HÀM XỬ LÝ HASHTAG (Giữ nguyên)
-  // =======================================================
-
+  // Hàm xử lý hashtag
   void _addHashtag() {
     final tag = _hashtagController.text.trim().toLowerCase();
     if (tag.isNotEmpty && !_hashtags.contains(tag) && _hashtags.length < 5) {
@@ -225,7 +374,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
   }
 
   void _addSuggestedTag(String tag) {
-    if (!_hashtags.contains(tag) && _hashtags.length < 5) { // Thêm check giới hạn
+    if (!_hashtags.contains(tag) && _hashtags.length < 5) {
       setState(() {
         _hashtags.add(tag);
       });
@@ -234,137 +383,23 @@ class _CheckinScreenState extends State<CheckinScreen> {
     }
   }
 
-
-  // =======================================================
-  // HÀM LƯU DỮ LIỆU (FIREBASE)
-  // =======================================================
-
-  Future<String?> _uploadLocalFile(String path, String reviewId, String userId, int index) async {
-    if (path.startsWith('http') || path.startsWith('https')) {
-      return path; // Nếu là URL mạng, không cần upload
-    }
-
-    File file = File(path);
-    String fileName = '$reviewId/photo_$index.jpg';
-    Reference ref = FirebaseStorage.instance.ref().child('reviews/$userId/$fileName');
-
-    try {
-      UploadTask uploadTask = ref.putFile(file);
-      TaskSnapshot snapshot = await uploadTask;
-      return await snapshot.ref.getDownloadURL();
-    } catch (e) {
-      print("Lỗi tải ảnh lên Storage: $e");
-      return null;
-    }
-  }
-
-  // ===================================================================
-  // SỬA HÀM _submitReview (Đổi tên trường cho khớp)
-  // ===================================================================
-  Future<void> _submitReview() async {
-    if (_titleController.text.isEmpty || _commentController.text.isEmpty || _selectedPlace == null) {
-      _showSnackBar('Vui lòng nhập Tiêu đề, Nội dung và Chọn địa điểm.');
-      return;
-    }
-    if (_imagePaths.isEmpty) {
-      _showSnackBar('Vui lòng thêm ít nhất một ảnh.');
-      return;
-    }
-
-    setState(() {
-      _isSaving = true;
-    });
-
-    try {
-      final reviewsCollection = FirebaseFirestore.instance.collection('reviews');
-      final newDoc = reviewsCollection.doc();
-      final reviewId = newDoc.id;
-
-      // 1. Tải ảnh (chỉ tải ảnh cục bộ, giữ nguyên URL mạng)
-      List<String> finalImageUrls = [];
-      for (int i = 0; i < _imagePaths.length; i++) {
-        final url = await _uploadLocalFile(_imagePaths[i], reviewId, widget.currentUserId, i);
-        if (url != null) {
-          finalImageUrls.add(url);
-        }
-      }
-
-      if (finalImageUrls.isEmpty && _imagePaths.any((path) => !(path.startsWith('http') || path.startsWith('https')))) {
-        // Chỉ báo lỗi nếu có ảnh cục bộ nhưng không tải lên được
-        _showSnackBar('Không thể tải ảnh lên. Vui lòng thử lại.');
-        // Đặt _isSaving về false để người dùng có thể thử lại
-         if (mounted) {
-           setState(() { _isSaving = false; });
-         }
-        return;
-      }
-      // Nếu chỉ có URL mạng thì finalImageUrls có thể rỗng, vẫn tiếp tục
-
-
-      // SỬA CÁC TÊN TRƯỜNG CHO KHỚP VỚI exploreScreen
-      final reviewData = {
-        'authorId': widget.currentUserId, // SỬA 1: 'userId' -> 'authorId'
-        'placeId': _selectedPlace!.id,
-        'rating': 5, // Tạm thời hard-code
-        'comment': _commentController.text.trim(),
-        'title': _titleController.text.trim(),
-        'imageUrls': finalImageUrls.isNotEmpty ? finalImageUrls : _imagePaths.where((path) => path.startsWith('http')).toList(), // Ưu tiên URL đã upload, nếu không có thì lấy URL mạng đã nhập
-        'hashtags': _hashtags, // exploreScreen đã sửa để đọc 'hashtags'
-        'createdAt': FieldValue.serverTimestamp(),
-        'likeCount': 0,     // SỬA 2: 'likesCount' -> 'likeCount'
-        'commentCount': 0,  // SỬA 3: 'commentsCount' -> 'commentCount'
-      };
-
-      // Kiểm tra lại lần cuối trước khi ghi
-      if ((reviewData['imageUrls'] as List).isEmpty) {
-          _showSnackBar('Không có ảnh hợp lệ để đăng.');
-          if (mounted) { setState(() { _isSaving = false; }); }
-          return;
-      }
-
-      await newDoc.set(reviewData);
-
-      _showSnackBar('Đăng bài check-in thành công!');
-      Navigator.pop(context);
-
-    } catch (e) {
-      _showSnackBar('Lỗi khi đăng bài: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
-
-  void _showSnackBar(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-    }
-  }
-
-  // =======================================================
-  // WIDGET BUILDER (Giữ nguyên)
-  // =======================================================
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text(
-          'Checkin',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)
+            'Checkin',
+            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)
         ),
-        backgroundColor: kAppbarColor, // Màu beige từ thiết kế
+        backgroundColor: kAppbarColor,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [],
+        actions: const [],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -409,48 +444,6 @@ class _CheckinScreenState extends State<CheckinScreen> {
     );
   }
 
-  Widget _buildImageItem(String path, VoidCallback onRemove) {
-    bool isNetwork = path.startsWith('http') || path.startsWith('https');
-    ImageProvider imageProvider;
-
-    if (isNetwork) {
-      imageProvider = NetworkImage(path);
-    } else {
-      imageProvider = FileImage(File(path));
-    }
-
-    return Stack(
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(right: 8.0),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image(
-              image: imageProvider,
-              width: 100,
-              height: 100,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                  width: 100, height: 100, color: Colors.grey[200], child: const Center(child: Icon(Icons.broken_image, color: Colors.grey))), // Ít gây khó chịu hơn màu đỏ
-            ),
-          ),
-        ),
-        Positioned(
-          right: 4,
-          top: 4,
-          child: GestureDetector(
-            onTap: onRemove,
-            child: const CircleAvatar(
-              radius: 10,
-              backgroundColor: Colors.black54,
-              child: Icon(Icons.close, size: 12, color: Colors.white),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildImageSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -488,7 +481,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
             ),
           )
         else
-          Container(
+          SizedBox(
             height: 100,
             child: Row(
               children: [
@@ -612,8 +605,8 @@ class _CheckinScreenState extends State<CheckinScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: const Text(
-                        'Thêm địa điểm',
-                        style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w500, fontSize: 15)
+                          'Thêm địa điểm',
+                          style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w500, fontSize: 15)
                       ),
                     ),
                   ),
@@ -624,12 +617,12 @@ class _CheckinScreenState extends State<CheckinScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _selectedPlace!.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)
+                          _selectedPlace!.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)
                       ),
                       Text(
-                        _selectedPlace!.address,
-                        style: TextStyle(color: Colors.grey[600], fontSize: 13)
+                          _selectedPlace!.address,
+                          style: TextStyle(color: Colors.grey[600], fontSize: 13)
                       ),
                     ],
                   ),
@@ -677,11 +670,11 @@ class _CheckinScreenState extends State<CheckinScreen> {
           spacing: 8.0,
           runSpacing: 8.0,
           children: _suggestedTags.map((tag) {
-            bool isSelected = _hashtags.contains(tag); // Kiểm tra tag đã được chọn chưa
+            bool isSelected = _hashtags.contains(tag);
             return ActionChip(
               label: Text(tag, style: TextStyle(fontSize: 12, color: isSelected ? Colors.grey : Colors.blue[700])),
               backgroundColor: isSelected ? Colors.grey[300] : Colors.blue[50],
-              onPressed: isSelected ? null : () => _addSuggestedTag(tag), // Vô hiệu hóa nếu đã chọn
+              onPressed: isSelected ? null : () => _addSuggestedTag(tag),
               tooltip: isSelected ? 'Đã chọn' : 'Thêm hashtag này',
             );
           }).toList(),
@@ -702,16 +695,16 @@ class _CheckinScreenState extends State<CheckinScreen> {
                 child: TextField(
                   controller: _hashtagController,
                   decoration: InputDecoration(
-                    hintText: _hashtags.length < 5 ? 'Thêm hashtag...' : 'Đã đủ 5 hashtag', // Gợi ý khi đủ tag
-                    border: InputBorder.none,
-                    counterText: '${_hashtags.length}/5 hashtag'
+                      hintText: _hashtags.length < 5 ? 'Thêm hashtag...' : 'Đã đủ 5 hashtag',
+                      border: InputBorder.none,
+                      counterText: '${_hashtags.length}/5 hashtag'
                   ),
-                   enabled: _hashtags.length < 5, // Vô hiệu hóa input khi đủ 5 tag
-                   onSubmitted: (_) => _addHashtag(), // Thêm bằng nút Enter
+                  enabled: _hashtags.length < 5,
+                  onSubmitted: (_) => _addHashtag(),
                 ),
               ),
               TextButton(
-                onPressed: _hashtags.length < 5 ? _addHashtag : null, // Vô hiệu hóa nút Thêm khi đủ tag
+                onPressed: _hashtags.length < 5 ? _addHashtag : null,
                 child: Text('Thêm', style: TextStyle(color: _hashtags.length < 5 ? Colors.orange : Colors.grey)),
               ),
             ],
@@ -722,7 +715,6 @@ class _CheckinScreenState extends State<CheckinScreen> {
   }
 
   Widget _buildPrivacySection() {
-    // Tạm thời để Công khai, bạn có thể thêm logic chọn sau
     String _privacySetting = 'Công khai';
     IconData _privacyIcon = Icons.lock_open;
 
@@ -731,10 +723,9 @@ class _CheckinScreenState extends State<CheckinScreen> {
       children: [
         const Text('Quyền riêng tư', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         const SizedBox(height: 12),
-        InkWell( // Thêm InkWell để có thể bấm chọn sau này
+        InkWell(
           onTap: () {
-             _showSnackBar('Chức năng chọn quyền riêng tư chưa được cài đặt.');
-             // TODO: Thêm logic mở dialog chọn quyền riêng tư
+            _showSnackBar('Chức năng chọn quyền riêng tư chưa được cài đặt.');
           },
           borderRadius: BorderRadius.circular(8),
           child: Container(
@@ -752,8 +743,8 @@ class _CheckinScreenState extends State<CheckinScreen> {
                     Icon(_privacyIcon, color: Colors.black54),
                     SizedBox(width: 12),
                     Text(
-                      _privacySetting,
-                      style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15, color: Colors.black87)
+                        _privacySetting,
+                        style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15, color: Colors.black87)
                     ),
                   ],
                 ),
@@ -784,13 +775,12 @@ class _PlacePlacePickerModalState extends State<_PlacePickerModal> {
 
   @override
   Widget build(BuildContext context) {
-    // Lọc dữ liệu trực tiếp trong build
     final filteredPlaces = _searchText.isEmpty
-        ? samplePlaces // Hiển thị tất cả nếu không tìm kiếm
+        ? samplePlaces
         : samplePlaces.where((place) =>
-              place.name.toLowerCase().contains(_searchText.toLowerCase()) ||
-              place.address.toLowerCase().contains(_searchText.toLowerCase())
-          ).toList();
+    place.name.toLowerCase().contains(_searchText.toLowerCase()) ||
+        place.address.toLowerCase().contains(_searchText.toLowerCase())
+    ).toList();
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
@@ -829,25 +819,21 @@ class _PlacePlacePickerModalState extends State<_PlacePickerModal> {
                 borderSide: const BorderSide(color: kBorderColor, width: 2),
               ),
               contentPadding: const EdgeInsets.symmetric(vertical: 10),
-              suffixIcon: _searchText.isNotEmpty ? IconButton( // Thêm nút xóa text
-                  icon: Icon(Icons.clear, color: Colors.grey),
-                  onPressed: () {
-                     setState(() { _searchText = ''; });
-                     // Có thể cần controller.clear() nếu bạn dùng TextEditingController
-                  },
+              suffixIcon: _searchText.isNotEmpty ? IconButton(
+                icon: Icon(Icons.clear, color: Colors.grey),
+                onPressed: () {
+                  setState(() { _searchText = ''; });
+                },
               ) : null,
             ),
-             // Có thể thêm controller nếu cần xóa text từ nút suffixIcon
-             // controller: _searchController,
           ),
           const SizedBox(height: 16),
 
-          // Hiển thị thông báo nếu không có kết quả
           if (filteredPlaces.isEmpty && _searchText.isNotEmpty)
-             const Padding(
-                padding: EdgeInsets.symmetric(vertical: 20.0),
-                child: Text('Không tìm thấy địa điểm phù hợp.'),
-             )
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20.0),
+              child: Text('Không tìm thấy địa điểm phù hợp.'),
+            )
           else
             Expanded(
               child: ListView.builder(
@@ -855,7 +841,7 @@ class _PlacePlacePickerModalState extends State<_PlacePickerModal> {
                 itemBuilder: (context, index) {
                   final place = filteredPlaces[index];
                   return ListTile(
-                    leading: Icon(Icons.location_pin, color: Colors.grey[400]), // Thêm icon cho đẹp
+                    leading: Icon(Icons.location_pin, color: Colors.grey[400]),
                     title: Text(place.name, style: const TextStyle(fontWeight: FontWeight.w500)),
                     subtitle: Text(place.address, style: TextStyle(color: Colors.grey[600])),
                     onTap: () => widget.onPlaceSelected(place),
@@ -870,8 +856,8 @@ class _PlacePlacePickerModalState extends State<_PlacePickerModal> {
               onPressed: () => Navigator.pop(context),
               child: const Text('Hủy', style: TextStyle(color: Colors.black87)),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                side: BorderSide(color: Colors.grey[300]!)
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: BorderSide(color: Colors.grey[300]!)
               ),
             ),
           ),
