@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 // !!! QUAN TRỌNG: Đảm bảo đường dẫn này đúng tới file AddPlaceScreen của bạn
 import 'package:nhom_3_damh_lttbdd/screens/addPlaceRequest.dart'; // <<< SỬA ĐƯỜNG DẪN NẾU CẦN
+import 'package:nhom_3_damh_lttbdd/screens/checkinScreen.dart'; // <<< THÊM DÒNG NÀY (Sửa nếu cần)
 import 'package:geocoding/geocoding.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math'; // Cần cho hàm tính toán _findNearbyPlace (nếu dùng lại) và cos
@@ -73,17 +74,20 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
       permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied)
+        if (permission == LocationPermission.denied) {
           throw Exception('Quyền truy cập vị trí bị từ chối.');
+        }
       }
-      if (permission == LocationPermission.deniedForever)
+      if (permission == LocationPermission.deniedForever) {
         throw Exception('Quyền truy cập vị trí bị từ chối vĩnh viễn.');
+      }
       Position position = await Geolocator.getCurrentPosition();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _currentCenter = LatLng(position.latitude, position.longitude);
           _isLoadingLocation = false;
         });
+      }
     } catch (e) {
       print("Lỗi khi lấy vị trí: $e");
       if (mounted) {
@@ -208,6 +212,241 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
       if (distance < thresholdDistance) return true;
     }
     return false;
+  }
+
+  // --- HÀM HELPER ĐỂ VẼ 1 ẢNH (TỪ exploreScreen) ---
+  Widget _buildImage(
+    String imageUrl, {
+    required double height,
+    required double width,
+    Widget? overlay,
+    bool isTaller = false, // Thêm isTaller để xử lý StackFit
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8), // Có thể giảm bo góc nếu muốn
+      child: Stack(
+        // StackFit.expand chỉ hoạt động tốt khi widget cha có kích thước cố định
+        // Nếu không, dùng StackFit.loose để tránh lỗi layout
+        fit: isTaller ? StackFit.expand : StackFit.loose,
+        children: [
+          Image.network(
+            imageUrl,
+            height: height,
+            width: width,
+            fit: BoxFit.cover, // Luôn cover
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Container(
+                color: Colors.grey[200],
+                height: height,
+                width: width, // Đảm bảo kích thước
+                child: Center(
+                  child: CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                        : null,
+                    strokeWidth: 2, // Mỏng hơn
+                  ),
+                ),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                color: Colors.grey[200],
+                height: height,
+                width: width, // Đảm bảo kích thước
+                child: const Center(
+                  child: Icon(Icons.error_outline, color: Colors.red, size: 30),
+                ),
+              );
+            },
+          ),
+          // Overlay (dùng cho ảnh cuối cùng khi có nhiều hơn 4 ảnh)
+          if (overlay != null) overlay,
+        ],
+      ),
+    );
+  }
+
+  // --- HÀM HELPER ĐỂ VẼ GRID ẢNH (TỪ exploreScreen) ---
+  Widget _buildPhotoGrid(List<dynamic> imageUrls) {
+    // Chuyển đổi List<dynamic> thành List<String> một cách an toàn
+    final images = imageUrls.whereType<String>().toList();
+    final int count = images.length;
+
+    if (count == 0)
+      return const SizedBox.shrink(); // Không vẽ gì nếu không có ảnh
+
+    const double totalHeight = 180; // Chiều cao cố định cho khu vực ảnh
+
+    // Trường hợp 1 ảnh
+    if (count == 1) {
+      return SizedBox(
+        height: totalHeight,
+        width: double.infinity,
+        child: _buildImage(
+          images[0],
+          height: totalHeight,
+          width: double.infinity,
+          isTaller: true, // Cho phép StackFit.expand
+        ),
+      );
+    }
+
+    // Trường hợp 2 ảnh
+    if (count == 2) {
+      return SizedBox(
+        height: totalHeight,
+        child: Row(
+          children: [
+            Expanded(
+              child: _buildImage(
+                images[0],
+                height: totalHeight,
+                width: double.infinity,
+                isTaller: true,
+              ),
+            ),
+            const SizedBox(width: 4), // Khoảng cách nhỏ
+            Expanded(
+              child: _buildImage(
+                images[1],
+                height: totalHeight,
+                width: double.infinity,
+                isTaller: true,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Trường hợp 3 ảnh (1 lớn, 2 nhỏ)
+    if (count == 3) {
+      return SizedBox(
+        height: totalHeight,
+        child: Row(
+          children: [
+            Expanded(
+              // Ảnh lớn bên trái
+              flex: 2, // Chiếm 2/3
+              child: _buildImage(
+                images[0],
+                height: totalHeight,
+                width: double.infinity,
+                isTaller: true,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              // Cột 2 ảnh nhỏ bên phải
+              flex: 1, // Chiếm 1/3
+              child: Column(
+                children: [
+                  Expanded(
+                    child: _buildImage(
+                      images[1],
+                      height: double.infinity,
+                      width: double.infinity,
+                      isTaller: true,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: _buildImage(
+                      images[2],
+                      height: double.infinity,
+                      width: double.infinity,
+                      isTaller: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Trường hợp 4 ảnh trở lên (Grid 2x2, ảnh cuối có overlay +số)
+    final int remainingCount = count - 4; // Số ảnh còn lại sau 4 ảnh đầu
+
+    return SizedBox(
+      height: totalHeight,
+      child: Column(
+        children: [
+          // Hàng trên (ảnh 1, ảnh 2)
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildImage(
+                    images[0],
+                    height: double.infinity,
+                    width: double.infinity,
+                    isTaller: true,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: _buildImage(
+                    images[1],
+                    height: double.infinity,
+                    width: double.infinity,
+                    isTaller: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          // Hàng dưới (ảnh 3, ảnh 4 + overlay)
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildImage(
+                    images[2],
+                    height: double.infinity,
+                    width: double.infinity,
+                    isTaller: true,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: _buildImage(
+                    // Ảnh thứ 4
+                    images[3],
+                    height: double.infinity,
+                    width: double.infinity,
+                    isTaller: true,
+                    // Overlay chỉ hiển thị nếu còn ảnh (remainingCount > 0)
+                    overlay: remainingCount > 0
+                        ? Container(
+                            // Lớp phủ màu đen mờ
+                            color: Colors.black54,
+                            child: Center(
+                              // Căn giữa số ảnh còn lại
+                              child: Text(
+                                '+$remainingCount', // Hiển thị "+số"
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 28, // Cỡ chữ to hơn
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          )
+                        : null, // Không có overlay nếu chỉ có 4 ảnh
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // === Hàm Build chính (Đã cập nhật loading) ===
@@ -500,14 +739,26 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
                           label: 'Viết Review',
                           color: Colors.orange,
                           onTap: () {
-                            Navigator.pop(context);
-                            print(
-                              'Navigate to Review Screen for placeId: $placeId',
+                            Navigator.pop(
+                              context,
+                            ); // Đóng bottom sheet hiện tại
+
+                            // === THÊM NAVIGATOR.PUSH ===
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => CheckinScreen(
+                                  currentUserId:
+                                      widget.userId, // Truyền userId hiện tại
+                                  initialPlaceId:
+                                      placeId, // <<< Truyền placeId đã chọn
+                                ),
+                              ),
                             );
-                            // TODO: Thêm Navigator.push đến màn hình Review
-                            setState(() {
-                              _longPressedLatLng = null;
-                            });
+                            // ===========================
+
+                            // Không cần setState ở đây nữa vì bottom sheet đã đóng
+                            // setState(() { _longPressedLatLng = null; });
                           },
                         ),
                       ],
@@ -539,12 +790,22 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      Navigator.pop(context);
-                      print('Navigate to Review Screen for placeId: $placeId');
-                      // TODO: Thêm Navigator.push đến màn hình Review
-                      setState(() {
-                        _longPressedLatLng = null;
-                      });
+                      Navigator.pop(context); // Đóng bottom sheet hiện tại
+
+                      // === THÊM NAVIGATOR.PUSH ===
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CheckinScreen(
+                            currentUserId: widget.userId, // Truyền userId
+                            initialPlaceId: placeId, // <<< Truyền placeId
+                          ),
+                        ),
+                      );
+                      // ===========================
+
+                      // Không cần setState ở đây
+                      // setState(() { _longPressedLatLng = null; });
                     },
                     icon: const Icon(Icons.rate_review_outlined),
                     label: const Text('Đăng bài review'),
@@ -578,8 +839,11 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
 
   // === HÀM HELPER: XÂY DỰNG PHẦN HIỂN THỊ ẢNH (Giữ nguyên) ===
   Widget _buildImageSection(List<dynamic> imageUrls) {
-    if (imageUrls.isEmpty) {
-      // Placeholder
+    // Chuyển đổi an toàn sang List<String>
+    final images = imageUrls.whereType<String>().toList();
+
+    if (images.isEmpty) {
+      // Placeholder khi không có ảnh (Giữ nguyên)
       return Container(
         height: 150,
         width: double.infinity,
@@ -599,38 +863,9 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
         ),
       );
     } else {
-      // TODO: Nâng cấp thành Grid hoặc PageView
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          imageUrls.first as String,
-          height: 180,
-          width: double.infinity,
-          fit: BoxFit.cover,
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Container(
-              height: 180,
-              color: Colors.grey[200],
-              child: Center(
-                child: CircularProgressIndicator(
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded /
-                            loadingProgress.expectedTotalBytes!
-                      : null,
-                ),
-              ),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) => Container(
-            height: 180,
-            color: Colors.grey[200],
-            child: const Center(
-              child: Icon(Icons.broken_image, color: Colors.grey),
-            ),
-          ),
-        ),
-      );
+      // === GỌI HÀM VẼ GRID MỚI ===
+      return _buildPhotoGrid(images);
+      // ===========================
     }
   }
 } // End of _WorldMapScreenState
