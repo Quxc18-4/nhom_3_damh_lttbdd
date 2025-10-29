@@ -17,9 +17,9 @@ class User {
   User({required this.id, required this.name, required this.avatarUrl});
 
   factory User.empty() => User(
-      id: '',
-      name: 'Đang tải...',
-      avatarUrl: 'assets/images/default_avatar.png'
+    id: '',
+    name: 'Đang tải...',
+    avatarUrl: 'assets/images/default_avatar.png',
   );
 
   factory User.fromDoc(DocumentSnapshot doc) {
@@ -59,11 +59,17 @@ class Post {
     this.isLikedByUser = false,
   });
 
-  factory Post.fromDoc(DocumentSnapshot doc, User postAuthor, {bool isLiked = false}) {
+  factory Post.fromDoc(
+    DocumentSnapshot doc,
+    User postAuthor, {
+    bool isLiked = false,
+  }) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     final Timestamp timestamp = data['createdAt'] ?? Timestamp.now();
     final DateTime postTime = timestamp.toDate();
-    final String formattedTime = DateFormat('dd/MM/yyyy, HH:mm').format(postTime);
+    final String formattedTime = DateFormat(
+      'dd/MM/yyyy, HH:mm',
+    ).format(postTime);
 
     return Post(
       id: doc.id,
@@ -88,16 +94,14 @@ class Post {
 class ExploreScreen extends StatefulWidget {
   final String userId;
 
-  const ExploreScreen({
-    Key? key,
-    required this.userId,
-  }) : super(key: key);
+  const ExploreScreen({Key? key, required this.userId}) : super(key: key);
 
   @override
   _ExploreScreenState createState() => _ExploreScreenState();
 }
 
-class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProviderStateMixin {
+class _ExploreScreenState extends State<ExploreScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   List<Post> _posts = [];
   bool _isLoading = true;
@@ -202,17 +206,17 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                 userCache[authorId] = postAuthor;
               } else {
                 postAuthor = User(
-                    id: authorId,
-                    name: 'Người dùng ẩn danh',
-                    avatarUrl: 'assets/images/default_avatar.png'
+                  id: authorId,
+                  name: 'Người dùng ẩn danh',
+                  avatarUrl: 'assets/images/default_avatar.png',
                 );
               }
             } catch (e) {
               print("Lỗi fetch author $authorId: $e");
               postAuthor = User(
-                  id: authorId,
-                  name: 'Lỗi tải User',
-                  avatarUrl: 'assets/images/default_avatar.png'
+                id: authorId,
+                name: 'Lỗi tải User',
+                avatarUrl: 'assets/images/default_avatar.png',
               );
             }
           }
@@ -243,7 +247,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
           _isLoading = false;
         });
       }
-
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -251,8 +254,8 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text("Lỗi tải bài viết: $e"),
-              backgroundColor: Colors.red
+            content: Text("Lỗi tải bài viết: $e"),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -311,7 +314,8 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => CheckinScreen(currentUserId: widget.userId),
+                      builder: (context) =>
+                          CheckinScreen(currentUserId: widget.userId),
                     ),
                   ).then((_) => _fetchPosts());
                 },
@@ -324,7 +328,8 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => CheckinScreen(currentUserId: widget.userId),
+                      builder: (context) =>
+                          CheckinScreen(currentUserId: widget.userId),
                     ),
                   ).then((_) => _fetchPosts());
                 },
@@ -365,7 +370,10 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
               children: [
                 Text(
                   label,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 if (subLabel != null)
                   Text(
@@ -390,14 +398,13 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
           const SizedBox(height: 10),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+                ? const Center(
+                    child: CircularProgressIndicator(color: Colors.orange),
+                  )
                 : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildPostListView(),
-                _buildPostListView(),
-              ],
-            ),
+                    controller: _tabController,
+                    children: [_buildPostListView(), _buildPostListView()],
+                  ),
           ),
         ],
       ),
@@ -430,7 +437,8 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => PersonalProfileScreen(userId: widget.userId),
+                      builder: (context) =>
+                          PersonalProfileScreen(userId: widget.userId),
                     ),
                   );
                 },
@@ -442,10 +450,13 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                     children: [
                       _isUserDataLoading
                           ? const CircleAvatar(
-                        radius: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                          : CircleAvatar(radius: 20, backgroundImage: _getAvatarProvider()),
+                              radius: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : CircleAvatar(
+                              radius: 20,
+                              backgroundImage: _getAvatarProvider(),
+                            ),
                       const SizedBox(width: 12),
                       Text(
                         _userName,
@@ -461,7 +472,11 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
               ),
               const Spacer(),
               IconButton(
-                icon: Icon(Icons.notifications_none, color: Colors.grey[800], size: 28),
+                icon: Icon(
+                  Icons.notifications_none,
+                  color: Colors.grey[800],
+                  size: 28,
+                ),
                 onPressed: () {},
               ),
             ],
@@ -615,10 +630,7 @@ class _PostCardState extends State<PostCard> {
           _isProcessing = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Lỗi: $e"),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text("Lỗi: $e"), backgroundColor: Colors.red),
         );
       }
       print("Lỗi toggle like: $e");
@@ -663,11 +675,12 @@ class _PostCardState extends State<PostCard> {
     return AssetImage(widget.post.author.avatarUrl);
   }
 
-  Widget _buildImage(String imageUrl, {
+  Widget _buildImage(
+    String imageUrl, {
     required double height,
     required double width,
     Widget? overlay,
-    required bool isTaller
+    required bool isTaller,
   }) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
@@ -687,7 +700,7 @@ class _PostCardState extends State<PostCard> {
                   child: CircularProgressIndicator(
                     value: loadingProgress.expectedTotalBytes != null
                         ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
+                              loadingProgress.expectedTotalBytes!
                         : null,
                   ),
                 ),
@@ -697,7 +710,7 @@ class _PostCardState extends State<PostCard> {
               return Container(
                 color: Colors.grey[200],
                 child: const Center(
-                    child: Icon(Icons.error_outline, color: Colors.red)
+                  child: Icon(Icons.error_outline, color: Colors.red),
                 ),
               );
             },
@@ -721,10 +734,10 @@ class _PostCardState extends State<PostCard> {
         height: mainHeight,
         width: double.infinity,
         child: _buildImage(
-            images[0],
-            height: mainHeight,
-            width: double.infinity,
-            isTaller: true
+          images[0],
+          height: mainHeight,
+          width: double.infinity,
+          isTaller: true,
         ),
       );
     }
@@ -734,9 +747,23 @@ class _PostCardState extends State<PostCard> {
         height: mainHeight,
         child: Row(
           children: [
-            Expanded(child: _buildImage(images[0], height: mainHeight, width: double.infinity, isTaller: true)),
+            Expanded(
+              child: _buildImage(
+                images[0],
+                height: mainHeight,
+                width: double.infinity,
+                isTaller: true,
+              ),
+            ),
             const SizedBox(width: 4),
-            Expanded(child: _buildImage(images[1], height: mainHeight, width: double.infinity, isTaller: true)),
+            Expanded(
+              child: _buildImage(
+                images[1],
+                height: mainHeight,
+                width: double.infinity,
+                isTaller: true,
+              ),
+            ),
           ],
         ),
       );
@@ -749,16 +776,35 @@ class _PostCardState extends State<PostCard> {
           children: [
             Expanded(
               flex: 2,
-              child: _buildImage(images[0], height: mainHeight, width: double.infinity, isTaller: true),
+              child: _buildImage(
+                images[0],
+                height: mainHeight,
+                width: double.infinity,
+                isTaller: true,
+              ),
             ),
             const SizedBox(width: 4),
             Expanded(
               flex: 1,
               child: Column(
                 children: [
-                  Expanded(child: _buildImage(images[1], height: double.infinity, width: double.infinity, isTaller: true)),
+                  Expanded(
+                    child: _buildImage(
+                      images[1],
+                      height: double.infinity,
+                      width: double.infinity,
+                      isTaller: true,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Expanded(child: _buildImage(images[2], height: double.infinity, width: double.infinity, isTaller: true)),
+                  Expanded(
+                    child: _buildImage(
+                      images[2],
+                      height: double.infinity,
+                      width: double.infinity,
+                      isTaller: true,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -776,9 +822,23 @@ class _PostCardState extends State<PostCard> {
           Expanded(
             child: Row(
               children: [
-                Expanded(child: _buildImage(images[0], height: double.infinity, width: double.infinity, isTaller: true)),
+                Expanded(
+                  child: _buildImage(
+                    images[0],
+                    height: double.infinity,
+                    width: double.infinity,
+                    isTaller: true,
+                  ),
+                ),
                 const SizedBox(width: 4),
-                Expanded(child: _buildImage(images[1], height: double.infinity, width: double.infinity, isTaller: true)),
+                Expanded(
+                  child: _buildImage(
+                    images[1],
+                    height: double.infinity,
+                    width: double.infinity,
+                    isTaller: true,
+                  ),
+                ),
               ],
             ),
           ),
@@ -786,7 +846,14 @@ class _PostCardState extends State<PostCard> {
           Expanded(
             child: Row(
               children: [
-                Expanded(child: _buildImage(images[2], height: double.infinity, width: double.infinity, isTaller: true)),
+                Expanded(
+                  child: _buildImage(
+                    images[2],
+                    height: double.infinity,
+                    width: double.infinity,
+                    isTaller: true,
+                  ),
+                ),
                 const SizedBox(width: 4),
                 Expanded(
                   child: _buildImage(
@@ -796,18 +863,18 @@ class _PostCardState extends State<PostCard> {
                     isTaller: true,
                     overlay: remainingCount > 0
                         ? Container(
-                      color: Colors.black54,
-                      child: Center(
-                        child: Text(
-                          '+ $remainingCount',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold
-                          ),
-                        ),
-                      ),
-                    )
+                            color: Colors.black54,
+                            child: Center(
+                              child: Text(
+                                '+ $remainingCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          )
                         : null,
                   ),
                 ),
@@ -831,21 +898,44 @@ class _PostCardState extends State<PostCard> {
         children: [
           Row(
             children: [
-              CircleAvatar(backgroundImage: _getAuthorAvatar()),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.post.author.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    widget.post.timeAgo,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                  ),
-                ],
+              // ✅ BỌC BẰNG GESTUREDETECTOR
+              GestureDetector(
+                onTap: () {
+                  // ✅ HÀNH ĐỘNG ĐIỀU HƯỚNG
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      // Sử dụng authorId của bài viết
+                      builder: (context) =>
+                          PersonalProfileScreen(userId: widget.post.authorId),
+                    ),
+                  );
+                },
+                // Bọc cả avatar và tên trong một Row
+                child: Row(
+                  children: [
+                    CircleAvatar(backgroundImage: _getAuthorAvatar()),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.post.author.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          widget.post.timeAgo,
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
+              // ✅ KẾT THÚC THAY ĐỔI
               const Spacer(),
               IconButton(icon: const Icon(Icons.more_horiz), onPressed: () {}),
             ],
@@ -857,7 +947,10 @@ class _PostCardState extends State<PostCard> {
           ),
           const SizedBox(height: 4),
           if (widget.post.content.isNotEmpty) ...[
-            Text(widget.post.content, style: TextStyle(color: Colors.grey[700])),
+            Text(
+              widget.post.content,
+              style: TextStyle(color: Colors.grey[700]),
+            ),
             const SizedBox(height: 12),
           ],
           ClipRRect(
@@ -870,12 +963,12 @@ class _PostCardState extends State<PostCard> {
             children: widget.post.tags
                 .map(
                   (tag) => Chip(
-                label: Text(tag, style: const TextStyle(fontSize: 12)),
-                backgroundColor: Colors.grey[200],
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            )
+                    label: Text(tag, style: const TextStyle(fontSize: 12)),
+                    backgroundColor: Colors.grey[200],
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                )
                 .toList(),
           ),
           const Divider(height: 24),
@@ -986,7 +1079,9 @@ class _SaveDialogContentState extends State<_SaveDialogContent> {
               child: const Text("Tạo"),
               onPressed: () {
                 if (_albumNameController.text.trim().isNotEmpty) {
-                  Navigator.of(dialogContext).pop(_albumNameController.text.trim());
+                  Navigator.of(
+                    dialogContext,
+                  ).pop(_albumNameController.text.trim());
                 }
               },
             ),
@@ -1002,18 +1097,18 @@ class _SaveDialogContentState extends State<_SaveDialogContent> {
             .doc(widget.userId)
             .collection('albums')
             .add({
-          'title': newAlbumName,
-          'description': '',
-          'createdAt': FieldValue.serverTimestamp(),
-          'photos': [],
-        });
+              'title': newAlbumName,
+              'description': '',
+              'createdAt': FieldValue.serverTimestamp(),
+              'photos': [],
+            });
         if (mounted) setState(() {});
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text("Tạo album thất bại: $e"),
-                backgroundColor: Colors.red
+              content: Text("Tạo album thất bại: $e"),
+              backgroundColor: Colors.red,
             ),
           );
         }
@@ -1031,12 +1126,12 @@ class _SaveDialogContentState extends State<_SaveDialogContent> {
           .doc(widget.userId)
           .collection('bookmarks')
           .add({
-        'reviewID': widget.reviewId,
-        'albumId': albumId,
-        'addedAt': FieldValue.serverTimestamp(),
-        'postImageUrl': widget.postImageUrl,
-        'creator': isCreator,
-      });
+            'reviewID': widget.reviewId,
+            'albumId': albumId,
+            'addedAt': FieldValue.serverTimestamp(),
+            'postImageUrl': widget.postImageUrl,
+            'creator': isCreator,
+          });
 
       if (mounted) {
         Navigator.of(context).pop();
@@ -1052,8 +1147,8 @@ class _SaveDialogContentState extends State<_SaveDialogContent> {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text("Lưu thất bại: $e"),
-              backgroundColor: Colors.red
+            content: Text("Lưu thất bại: $e"),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -1100,7 +1195,8 @@ class _SaveDialogContentState extends State<_SaveDialogContent> {
                 final albumDoc = albums[index - 1];
                 final albumData = albumDoc.data() as Map<String, dynamic>;
                 final String albumId = albumDoc.id;
-                final String albumTitle = albumData['title'] ?? 'Album không tên';
+                final String albumTitle =
+                    albumData['title'] ?? 'Album không tên';
 
                 return ListTile(
                   leading: const Icon(Icons.photo_album_outlined),
