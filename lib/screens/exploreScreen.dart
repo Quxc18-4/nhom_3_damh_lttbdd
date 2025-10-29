@@ -1,35 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:nhom_3_damh_lttbdd/model/post_model.dart'; // <-- Bỏ import này
+import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:nhom_3_damh_lttbdd/screens/checkinScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/personalProfileScreen.dart';
 
 // ===================================================================
-// 1. ĐỊNH NGHĨA MODEL (Thay thế cho post_model.dart)
+// 1. MODEL CLASSES
 // ===================================================================
 
-// Class User (như bạn đã giả định)
 class User {
   final String id;
   final String name;
   final String avatarUrl;
-  User({required this.id, required this.name, required this.avatarUrl});
-  
-  factory User.empty() => User(id: '', name: 'Đang tải...', avatarUrl: 'assets/images/default_avatar.png');
 
-  // Factory để tạo User từ Firestore
+  User({required this.id, required this.name, required this.avatarUrl});
+
+  factory User.empty() => User(
+      id: '',
+      name: 'Đang tải...',
+      avatarUrl: 'assets/images/default_avatar.png'
+  );
+
   factory User.fromDoc(DocumentSnapshot doc) {
-     final data = doc.data() as Map<String, dynamic>? ?? {};
-     return User(
-       id: doc.id,
-       name: data['fullName'] ?? data['name'] ?? 'Người dùng',
-       avatarUrl: data['avatarUrl'] ?? 'assets/images/default_avatar.png',
-     );
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    return User(
+      id: doc.id,
+      name: data['fullName'] ?? data['name'] ?? 'Người dùng',
+      avatarUrl: data['avatarUrl'] ?? 'assets/images/default_avatar.png',
+    );
   }
 }
 
-// Class Post (dựa trên những gì PostCard đang dùng)
 class Post {
   final String id;
   final User author;
@@ -38,9 +40,10 @@ class Post {
   final String content;
   final String timeAgo;
   final List<String> imageUrls;
-  final List<String> tags; // Sẽ đọc từ 'hashtags'
-  final int likeCount;
+  final List<String> tags;
+  int likeCount;
   final int commentCount;
+  bool isLikedByUser; // ✅ Thêm trạng thái like
 
   Post({
     required this.id,
@@ -53,38 +56,34 @@ class Post {
     required this.tags,
     required this.likeCount,
     required this.commentCount,
+    this.isLikedByUser = false,
   });
 
-  // Factory để tạo Post từ Firestore
-  factory Post.fromDoc(DocumentSnapshot doc, User postAuthor) {
+  factory Post.fromDoc(DocumentSnapshot doc, User postAuthor, {bool isLiked = false}) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     final Timestamp timestamp = data['createdAt'] ?? Timestamp.now();
     final DateTime postTime = timestamp.toDate();
-    
-    // Dùng intl để format thời gian
     final String formattedTime = DateFormat('dd/MM/yyyy, HH:mm').format(postTime);
 
     return Post(
       id: doc.id,
-      author: postAuthor, // User object đã fetch
-      authorId: data['authorId'] ?? '',
+      author: postAuthor,
+      authorId: data['userId'] ?? '',
       title: data['title'] ?? 'Không có tiêu đề',
-      content: data['comment'] ?? '', // Giả định content lưu trong trường 'comment'
-      timeAgo: formattedTime, // Hiển thị thời gian thực
+      content: data['comment'] ?? '',
+      timeAgo: formattedTime,
       imageUrls: List<String>.from(data['imageUrls'] ?? []),
-      
-      // SỬA LỖI HASHTAG: Đọc từ 'hashtags' (do checkinScreen lưu là 'hashtags')
-      tags: List<String>.from(data['hashtags'] ?? []), 
-      
+      tags: List<String>.from(data['hashtags'] ?? []),
       likeCount: data['likeCount'] ?? 0,
       commentCount: data['commentCount'] ?? 0,
+      isLikedByUser: isLiked,
     );
   }
 }
-// ===================================================================
-// HẾT PHẦN MODEL
-// ===================================================================
 
+// ===================================================================
+// 2. EXPLORE SCREEN
+// ===================================================================
 
 class ExploreScreen extends StatefulWidget {
   final String userId;
@@ -107,15 +106,24 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
   String _userAvatarUrl = "assets/images/default_avatar.png";
   bool _isUserDataLoading = true;
 
+  // ✅ Helper để kiểm tra authentication
+  bool get _isAuthenticated => auth.FirebaseAuth.instance.currentUser != null;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _fetchUserData();
-    _fetchPosts(); // <-- Sẽ gọi hàm _fetchPosts đã sửa
+    _fetchPosts();
   }
 
-  // Lấy thông tin người dùng từ Firestore (Giữ nguyên)
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  // Fetch user data
   Future<void> _fetchUserData() async {
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance
@@ -147,9 +155,7 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
     }
   }
 
-  // ===================================================================
-  // 2. HÀM _fetchPosts (Đã sửa để lấy data thật)
-  // ===================================================================
+  // ✅ Fetch posts với kiểm tra trạng thái like
   Future<void> _fetchPosts() async {
     if (!mounted) return;
     setState(() {
@@ -157,54 +163,80 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
     });
 
     try {
-      // 1. Truy vấn collection 'reviews', sắp xếp theo thời gian mới nhất
       QuerySnapshot reviewSnapshot = await FirebaseFirestore.instance
           .collection('reviews')
           .orderBy('createdAt', descending: true)
           .get();
 
       if (reviewSnapshot.docs.isEmpty) {
-         if (mounted) {
-           setState(() {
-             _posts = [];
-             _isLoading = false;
-           });
-         }
-         return;
+        if (mounted) {
+          setState(() {
+            _posts = [];
+            _isLoading = false;
+          });
+        }
+        return;
       }
 
       List<Post> fetchedPosts = [];
-      
-      // 2. Lặp qua từng bài viết (review)
+      Map<String, User> userCache = {};
+
       for (var reviewDoc in reviewSnapshot.docs) {
         final reviewData = reviewDoc.data() as Map<String, dynamic>? ?? {};
-        final String? authorId = reviewData['userId'];
+        final String authorId = reviewData['userId'] ?? '';
 
-        User postAuthor = User.empty(); // Mặc định là 'Đang tải...'
+        User postAuthor = User.empty();
 
-        if (authorId != null && authorId.isNotEmpty) {
-          // 3. Lấy thông tin tác giả từ 'users' collection
-          try {
-            DocumentSnapshot authorDoc = await FirebaseFirestore.instance
-                .collection('users')
-                .doc(authorId)
-                .get();
+        if (authorId.isNotEmpty) {
+          if (userCache.containsKey(authorId)) {
+            postAuthor = userCache[authorId]!;
+          } else {
+            try {
+              DocumentSnapshot authorDoc = await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(authorId)
+                  .get();
 
-            if (authorDoc.exists) {
-              postAuthor = User.fromDoc(authorDoc);
-            } else {
-              postAuthor = User(id: authorId, name: 'Người dùng đã xóa', avatarUrl: 'assets/images/default_avatar.png');
+              if (authorDoc.exists) {
+                postAuthor = User.fromDoc(authorDoc);
+                userCache[authorId] = postAuthor;
+              } else {
+                postAuthor = User(
+                    id: authorId,
+                    name: 'Người dùng ẩn danh',
+                    avatarUrl: 'assets/images/default_avatar.png'
+                );
+              }
+            } catch (e) {
+              print("Lỗi fetch author $authorId: $e");
+              postAuthor = User(
+                  id: authorId,
+                  name: 'Lỗi tải User',
+                  avatarUrl: 'assets/images/default_avatar.png'
+              );
             }
-          } catch (e) {
-            print("Lỗi fetch author $authorId: $e");
           }
         }
-        
-        // 4. Tạo đối tượng Post hoàn chỉnh
-        fetchedPosts.add(Post.fromDoc(reviewDoc, postAuthor));
+
+        // ✅ Kiểm tra user đã like bài viết chưa (chỉ khi đã đăng nhập)
+        bool isLiked = false;
+        if (_isAuthenticated) {
+          try {
+            final likeDoc = await FirebaseFirestore.instance
+                .collection('reviews')
+                .doc(reviewDoc.id)
+                .collection('likes')
+                .doc(widget.userId)
+                .get();
+            isLiked = likeDoc.exists;
+          } catch (e) {
+            print("Lỗi kiểm tra like: $e");
+          }
+        }
+
+        fetchedPosts.add(Post.fromDoc(reviewDoc, postAuthor, isLiked: isLiked));
       }
 
-      // 5. Cập nhật UI
       if (mounted) {
         setState(() {
           _posts = fetchedPosts;
@@ -218,20 +250,27 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
           _isLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Lỗi tải bài viết: $e"), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text("Lỗi tải bài viết: $e"),
+              backgroundColor: Colors.red
+          ),
         );
       }
     }
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  // Hiển thị modal chọn loại bài viết (Giữ nguyên)
+  // ✅ Kiểm tra auth trước khi tạo bài viết
   void _showCreatePostOptions() {
+    if (!_isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Bạn cần đăng nhập để tạo bài viết!"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -268,24 +307,26 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                 label: 'Blog',
                 subLabel: 'Viết bài',
                 onTap: () {
+                  Navigator.pop(context);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => CheckinScreen(currentUserId: widget.userId),
                     ),
-                  );
+                  ).then((_) => _fetchPosts());
                 },
               ),
               _buildOptionTile(
                 icon: Icons.camera_alt_outlined,
                 label: 'Checkin',
                 onTap: () {
+                  Navigator.pop(context);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => CheckinScreen(currentUserId: widget.userId),
                     ),
-                  );
+                  ).then((_) => _fetchPosts());
                 },
               ),
               _buildOptionTile(
@@ -293,7 +334,7 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                 label: 'Đặt câu hỏi',
                 onTap: () {
                   Navigator.pop(context);
-                  // TODO: Logic chuyển hướng đến màn hình Đặt câu hỏi
+                  // TODO: Chuyển đến màn hình đặt câu hỏi
                 },
               ),
               const SizedBox(height: 10),
@@ -304,7 +345,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
     );
   }
 
-  // Helper widget cho các tùy chọn trong Bottom Sheet (Giữ nguyên)
   Widget _buildOptionTile({
     required IconData icon,
     required String label,
@@ -352,12 +392,12 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator(color: Colors.orange))
                 : TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildPostListView(widget.userId), // Tab "Đang theo dõi"
-                      _buildPostListView(widget.userId), // Tab "Dành cho bạn"
-                    ],
-                  ),
+              controller: _tabController,
+              children: [
+                _buildPostListView(),
+                _buildPostListView(),
+              ],
+            ),
           ),
         ],
       ),
@@ -369,7 +409,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
     );
   }
 
-  // Header với dữ liệu người dùng (Giữ nguyên)
   Widget _buildCustomHeader() {
     ImageProvider _getAvatarProvider() {
       if (_userAvatarUrl.startsWith('http')) {
@@ -403,9 +442,9 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
                     children: [
                       _isUserDataLoading
                           ? const CircleAvatar(
-                              radius: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
+                        radius: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                           : CircleAvatar(radius: 20, backgroundImage: _getAvatarProvider()),
                       const SizedBox(width: 12),
                       Text(
@@ -458,10 +497,7 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
     );
   }
 
-  // ===================================================================
-  // 3. SỬA HÀM _buildPostListView (Trả về Widget)
-  // ===================================================================
-  Widget _buildPostListView(String userId) {
+  Widget _buildPostListView() {
     if (_posts.isEmpty) {
       return const Center(
         child: Text(
@@ -470,14 +506,18 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
         ),
       );
     }
-    
+
     return ListView.builder(
       itemCount: _posts.length,
       itemBuilder: (context, index) {
         final post = _posts[index];
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4.0),
-          child: PostCard(post: post, userId: userId),
+          child: PostCard(
+            post: post,
+            userId: widget.userId,
+            onPostUpdated: () => _fetchPosts(), // Callback để refresh
+          ),
         );
       },
     );
@@ -485,79 +525,299 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
 }
 
 // ===================================================================
-// 4. POST CARD (Cập nhật để hiển thị ảnh từ network)
+// 3. POST CARD (Stateful để xử lý like real-time)
 // ===================================================================
 
-class PostCard extends StatelessWidget {
+class PostCard extends StatefulWidget {
   final Post post;
   final String userId;
+  final VoidCallback onPostUpdated;
 
   const PostCard({
     Key? key,
     required this.post,
     required this.userId,
+    required this.onPostUpdated,
   }) : super(key: key);
 
-  // Hiển thị dialog lưu bài viết
+  @override
+  State<PostCard> createState() => _PostCardState();
+}
+
+class _PostCardState extends State<PostCard> {
+  late bool _isLiked;
+  late int _likeCount;
+  bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isLiked = widget.post.isLikedByUser;
+    _likeCount = widget.post.likeCount;
+  }
+
+  // ✅ Toggle Like/Unlike (tuân thủ Firebase Rules)
+  Future<void> _toggleLike() async {
+    // Kiểm tra authentication
+    if (auth.FirebaseAuth.instance.currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Bạn cần đăng nhập để thích bài viết!"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_isProcessing) return;
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    final reviewRef = FirebaseFirestore.instance
+        .collection('reviews')
+        .doc(widget.post.id);
+    final likeRef = reviewRef.collection('likes').doc(widget.userId);
+
+    try {
+      if (_isLiked) {
+        // Unlike - Xóa document trong subcollection likes
+        await likeRef.delete();
+        await reviewRef.update({'likeCount': FieldValue.increment(-1)});
+
+        if (mounted) {
+          setState(() {
+            _isLiked = false;
+            _likeCount--;
+            _isProcessing = false;
+          });
+        }
+      } else {
+        // Like - Tạo document trong subcollection likes
+        await likeRef.set({
+          'userId': widget.userId,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        await reviewRef.update({'likeCount': FieldValue.increment(1)});
+
+        if (mounted) {
+          setState(() {
+            _isLiked = true;
+            _likeCount++;
+            _isProcessing = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Lỗi: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      print("Lỗi toggle like: $e");
+    }
+  }
+
+  // ✅ Show save dialog (kiểm tra auth)
   void _showSaveDialog(BuildContext context) {
-    final String reviewId = post.id;
-    final String authorId = post.authorId;
-    final String? imageUrl = post.imageUrls.isNotEmpty ? post.imageUrls.first : null;
+    if (auth.FirebaseAuth.instance.currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Bạn cần đăng nhập để lưu bài viết!"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final String reviewId = widget.post.id;
+    final String authorId = widget.post.authorId;
+    final String? imageUrl = widget.post.imageUrls.isNotEmpty
+        ? widget.post.imageUrls.first
+        : null;
 
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
         return _SaveDialogContent(
-          userId: userId,
+          userId: widget.userId,
           reviewId: reviewId,
-          authorId: authorId, 
+          authorId: authorId,
           postImageUrl: imageUrl,
         );
       },
     );
   }
 
-  // Helper lấy avatar
   ImageProvider _getAuthorAvatar() {
-    if (post.author.avatarUrl.startsWith('http')) {
-      return NetworkImage(post.author.avatarUrl);
+    if (widget.post.author.avatarUrl.startsWith('http')) {
+      return NetworkImage(widget.post.author.avatarUrl);
     }
-    return AssetImage(post.author.avatarUrl); // Dùng asset nếu là default
+    return AssetImage(widget.post.author.avatarUrl);
   }
 
-  // Helper lấy ảnh bài viết
-  Widget _getPostImage() {
-    if (post.imageUrls.isEmpty) {
-      return const SizedBox.shrink(); // Không có ảnh thì không hiển thị gì
-    }
-    
-    String imageUrl = post.imageUrls.first;
-    
-    if (imageUrl.startsWith('http')) {
-      return Image.network(
-        imageUrl, 
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, loadingProgress) {
-           if (loadingProgress == null) return child;
-           return Container(
-             height: 200,
-             color: Colors.grey[200],
-             child: Center(child: CircularProgressIndicator(value: loadingProgress.expectedTotalBytes != null ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes! : null,)),
-           );
-        },
-        errorBuilder: (context, error, stackTrace) {
-           return Container(
-             height: 200,
-             color: Colors.grey[200],
-             child: const Center(child: Icon(Icons.error_outline, color: Colors.red)),
-           );
-        },
+  Widget _buildImage(String imageUrl, {
+    required double height,
+    required double width,
+    Widget? overlay,
+    required bool isTaller
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Stack(
+        fit: isTaller ? StackFit.expand : StackFit.loose,
+        children: [
+          Image.network(
+            imageUrl,
+            height: height,
+            width: width,
+            fit: BoxFit.cover,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Container(
+                color: Colors.grey[200],
+                child: Center(
+                  child: CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                        : null,
+                  ),
+                ),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                color: Colors.grey[200],
+                child: const Center(
+                    child: Icon(Icons.error_outline, color: Colors.red)
+                ),
+              );
+            },
+          ),
+          if (overlay != null) overlay,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoGrid() {
+    final images = widget.post.imageUrls;
+    final int count = images.length;
+
+    if (count == 0) return const SizedBox.shrink();
+
+    const double mainHeight = 300;
+
+    if (count == 1) {
+      return SizedBox(
+        height: mainHeight,
+        width: double.infinity,
+        child: _buildImage(
+            images[0],
+            height: mainHeight,
+            width: double.infinity,
+            isTaller: true
+        ),
       );
     }
-    
-    return Image.asset(imageUrl, fit: BoxFit.cover);
-  }
 
+    if (count == 2) {
+      return SizedBox(
+        height: mainHeight,
+        child: Row(
+          children: [
+            Expanded(child: _buildImage(images[0], height: mainHeight, width: double.infinity, isTaller: true)),
+            const SizedBox(width: 4),
+            Expanded(child: _buildImage(images[1], height: mainHeight, width: double.infinity, isTaller: true)),
+          ],
+        ),
+      );
+    }
+
+    if (count == 3) {
+      return SizedBox(
+        height: mainHeight,
+        child: Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: _buildImage(images[0], height: mainHeight, width: double.infinity, isTaller: true),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              flex: 1,
+              child: Column(
+                children: [
+                  Expanded(child: _buildImage(images[1], height: double.infinity, width: double.infinity, isTaller: true)),
+                  const SizedBox(height: 4),
+                  Expanded(child: _buildImage(images[2], height: double.infinity, width: double.infinity, isTaller: true)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final remainingCount = count - 4;
+
+    return SizedBox(
+      height: mainHeight,
+      child: Column(
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(child: _buildImage(images[0], height: double.infinity, width: double.infinity, isTaller: true)),
+                const SizedBox(width: 4),
+                Expanded(child: _buildImage(images[1], height: double.infinity, width: double.infinity, isTaller: true)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(child: _buildImage(images[2], height: double.infinity, width: double.infinity, isTaller: true)),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: _buildImage(
+                    images[3],
+                    height: double.infinity,
+                    width: double.infinity,
+                    isTaller: true,
+                    overlay: remainingCount > 0
+                        ? Container(
+                      color: Colors.black54,
+                      child: Center(
+                        child: Text(
+                          '+ $remainingCount',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold
+                          ),
+                        ),
+                      ),
+                    )
+                        : null,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -571,17 +831,17 @@ class PostCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(backgroundImage: _getAuthorAvatar()), 
+              CircleAvatar(backgroundImage: _getAuthorAvatar()),
               const SizedBox(width: 10),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    post.author.name,
+                    widget.post.author.name,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    post.timeAgo, 
+                    widget.post.timeAgo,
                     style: TextStyle(color: Colors.grey[600], fontSize: 12),
                   ),
                 ],
@@ -592,46 +852,49 @@ class PostCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            post.title,
+            widget.post.title,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
-          if (post.content.isNotEmpty) ...[
-             Text(post.content, style: TextStyle(color: Colors.grey[700])),
-             const SizedBox(height: 12),
+          if (widget.post.content.isNotEmpty) ...[
+            Text(widget.post.content, style: TextStyle(color: Colors.grey[700])),
+            const SizedBox(height: 12),
           ],
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: _getPostImage(), // <-- Sửa
+            child: _buildPhotoGrid(),
           ),
           const SizedBox(height: 12),
-          // SỬA: Hiển thị tags (đã sửa ở Post.fromDoc)
           Wrap(
             spacing: 8.0,
-            children: post.tags
+            children: widget.post.tags
                 .map(
                   (tag) => Chip(
-                    label: Text(tag, style: const TextStyle(fontSize: 12)),
-                    backgroundColor: Colors.grey[200],
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                )
+                label: Text(tag, style: const TextStyle(fontSize: 12)),
+                backgroundColor: Colors.grey[200],
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            )
                 .toList(),
           ),
           const Divider(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // ✅ Nút Like với trạng thái động
               _buildActionButton(
-                icon: Icons.favorite_border,
-                text: numberFormat.format(post.likeCount),
-                onPressed: () {},
+                icon: _isLiked ? Icons.favorite : Icons.favorite_border,
+                text: numberFormat.format(_likeCount),
+                onPressed: _toggleLike,
+                color: _isLiked ? Colors.red : Colors.grey[700],
               ),
               _buildActionButton(
                 icon: Icons.chat_bubble_outline,
-                text: post.commentCount.toString(),
-                onPressed: () {},
+                text: widget.post.commentCount.toString(),
+                onPressed: () {
+                  // TODO: Mở màn hình comment
+                },
               ),
               _buildActionButton(
                 icon: Icons.share_outlined,
@@ -659,6 +922,7 @@ class PostCard extends StatelessWidget {
     required IconData icon,
     required String? text,
     required VoidCallback onPressed,
+    Color? color,
   }) {
     return InkWell(
       onTap: onPressed,
@@ -667,9 +931,10 @@ class PostCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
         child: Row(
           children: [
-            Icon(icon, color: Colors.grey[700], size: 22),
+            Icon(icon, color: color ?? Colors.grey[700], size: 22),
             if (text != null) const SizedBox(width: 4),
-            if (text != null) Text(text, style: TextStyle(color: Colors.grey[700])),
+            if (text != null)
+              Text(text, style: TextStyle(color: color ?? Colors.grey[700])),
           ],
         ),
       ),
@@ -678,20 +943,20 @@ class PostCard extends StatelessWidget {
 }
 
 // ===================================================================
-// 5. _SaveDialogContent (Giữ nguyên, đã đúng logic)
+// 4. SAVE DIALOG
 // ===================================================================
 
 class _SaveDialogContent extends StatefulWidget {
   final String userId;
   final String reviewId;
   final String authorId;
-  final String? postImageUrl; 
+  final String? postImageUrl;
 
   const _SaveDialogContent({
     required this.userId,
     required this.reviewId,
     required this.authorId,
-    this.postImageUrl, 
+    this.postImageUrl,
   });
 
   @override
@@ -699,7 +964,6 @@ class _SaveDialogContent extends StatefulWidget {
 }
 
 class _SaveDialogContentState extends State<_SaveDialogContent> {
-  // Tạo album mới
   Future<void> _showCreateAlbumDialog() async {
     final TextEditingController _albumNameController = TextEditingController();
 
@@ -747,14 +1011,17 @@ class _SaveDialogContentState extends State<_SaveDialogContent> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Tạo album thất bại: $e"), backgroundColor: Colors.red),
+            SnackBar(
+                content: Text("Tạo album thất bại: $e"),
+                backgroundColor: Colors.red
+            ),
           );
         }
       }
     }
   }
 
-  // Lưu bookmark vào Firestore
+  // ✅ Lưu bookmark vào Firestore
   Future<void> _saveBookmark({String? albumId}) async {
     final bool isCreator = (widget.userId == widget.authorId);
 
@@ -767,7 +1034,7 @@ class _SaveDialogContentState extends State<_SaveDialogContent> {
         'reviewID': widget.reviewId,
         'albumId': albumId,
         'addedAt': FieldValue.serverTimestamp(),
-        'postImageUrl': widget.postImageUrl, 
+        'postImageUrl': widget.postImageUrl,
         'creator': isCreator,
       });
 
@@ -784,9 +1051,13 @@ class _SaveDialogContentState extends State<_SaveDialogContent> {
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Lưu thất bại: $e"), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text("Lưu thất bại: $e"),
+              backgroundColor: Colors.red
+          ),
         );
       }
+      print("Lỗi lưu bookmark: $e");
     }
   }
 
