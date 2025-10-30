@@ -13,6 +13,9 @@ import 'journey_map_constants.dart'; // <<< Sửa đường dẫn nếu cần
 // !!! QUAN TRỌNG: Đảm bảo đường dẫn này đúng tới file service của bạn !!!
 import 'package:nhom_3_damh_lttbdd/services/cloudinary_service.dart'; // <<< Sửa đường dẫn nếu cần
 
+// ⚡️ IMPORT CATEGORY MODEL (MỚI)
+import 'package:nhom_3_damh_lttbdd/model/category_model.dart';
+
 class AddPlaceScreen extends StatefulWidget {
   final LatLng initialLatLng;
   final String userId;
@@ -31,6 +34,11 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoadingAddress = true;
   bool _isSubmitting = false;
+
+  List<CategoryModel> _allCategories = []; // Danh sách tất cả DM
+  List<CategoryModel> _selectedCategories = []; // Danh sách DM đã chọn
+  bool _isLoadingCategories = true;
+  final int _maxCategories = 3; // Giới hạn 3
 
   // Controllers
   final _nameController = TextEditingController();
@@ -51,6 +59,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
   void initState() {
     super.initState();
     _fetchAddressDetails();
+    _fetchCategories();
   }
 
   @override
@@ -72,6 +81,106 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _fetchCategories() async {
+    setState(() => _isLoadingCategories = true);
+    try {
+      // 1. Query từ collection 'categories' thật
+      final snapshot = await FirebaseFirestore.instance
+          .collection('categories')
+          .get();
+
+      // 2. Map data sang CategoryModel (sử dụng factory đã tạo)
+      final categories = snapshot.docs
+          .map((doc) => CategoryModel.fromFirestore(doc))
+          .toList();
+
+      // Sắp xếp theo tên cho dễ nhìn
+      categories.sort((a, b) => a.name.compareTo(b.name));
+
+      if (mounted) {
+        setState(() {
+          _allCategories = categories;
+        });
+      }
+    } catch (e) {
+      print("Lỗi fetch categories: $e");
+      // Lỗi này có thể do Security Rules (User chưa được quyền Read)
+      _showSnackBar('Không thể tải danh sách danh mục: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingCategories = false);
+      }
+    }
+  }
+
+  // === LOGIC QUẢN LÝ DANH MỤC (MỚI) === // <<< THÊM MỚI
+  void _showCategoryDialog() {
+    // Lọc ra những danh mục chưa được chọn
+    final availableCategories = _allCategories.where((cat) {
+      // Dùng hàm == đã override trong model để so sánh
+      return !_selectedCategories.contains(cat);
+    }).toList();
+
+    if (availableCategories.isEmpty) {
+      _showSnackBar('Bạn đã chọn tất cả danh mục có sẵn.');
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Chọn danh mục'),
+          contentPadding: const EdgeInsets.symmetric(vertical: 16.0),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              itemCount: availableCategories.length,
+              shrinkWrap: true,
+              itemBuilder: (context, index) {
+                final category = availableCategories[index];
+                return ListTile(
+                  title: Text(category.name),
+                  onTap: () {
+                    Navigator.of(context).pop(); // Đóng dialog trước
+                    _addCategory(category); // Sau đó mới thêm
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Hủy'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _addCategory(CategoryModel category) {
+    // Kiểm tra giới hạn TỐI ĐA
+    if (_selectedCategories.length >= _maxCategories) {
+      _showSnackBar('Chỉ được chọn tối đa $_maxCategories danh mục.');
+      return; // Không cho thêm
+    }
+    // Kiểm tra trùng lặp (dù dialog đã lọc, cẩn thận vẫn hơn)
+    if (!_selectedCategories.contains(category)) {
+      setState(() {
+        _selectedCategories.add(category);
+      });
+    }
+  }
+
+  void _removeCategory(CategoryModel category) {
+    setState(() {
+      // Dùng hàm remove, hàm này sẽ tìm đúng object nhờ == override
+      _selectedCategories.remove(category);
+    });
   }
 
   // === HÀM LẤY ĐỊA CHỈ (Đầy đủ) ===
@@ -248,6 +357,12 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
       _showSnackBar('Vui lòng kiểm tra lại các trường thông tin bắt buộc.');
       return;
     }
+
+    if (_selectedCategories.isEmpty) {
+      _showSnackBar('Vui lòng chọn ít nhất một danh mục.', isError: true);
+      return;
+    }
+
     // Tránh double submit
     if (_isSubmitting) return;
 
@@ -279,6 +394,9 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
       // --- BƯỚC 2: CHUẨN BỊ DỮ LIỆU FIRESTORE ---
       final String fullAddress =
           '${_streetController.text}, ${_wardController.text}, $_selectedCity';
+      final List<String> categoryIds = _selectedCategories
+          .map((cat) => cat.id)
+          .toList();
       final Map<String, dynamic> submissionData = {
         'submittedBy': widget.userId,
         'status': 'pending',
@@ -296,7 +414,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
             'ward': _wardController.text.trim(), // Đã thêm lại ward
             'city': _selectedCity,
           },
-          'categories': [],
+          'categories': categoryIds,
           'images': uploadedImageUrls, // Thêm URL ảnh đã upload
           'ratingAverage': 0,
           'reviewCount': 0,
@@ -330,7 +448,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Đăng ký địa điểm mới')),
-      body: _isLoadingAddress
+      body: (_isLoadingAddress || _isLoadingCategories)
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
@@ -427,6 +545,15 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                       ),
                       maxLines: 3,
                     ),
+                    const SizedBox(height: 16),
+
+                    // === PHẦN DANH MỤC (MỚI) === // <<< THÊM MỚI
+                    Text(
+                      'Danh mục * (${_selectedCategories.length}/$_maxCategories)',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildCategoryChipsArea(), // Widget hiển thị chip và nút thêm
                     const SizedBox(height: 16),
 
                     // === PHẦN HÌNH ẢNH (ĐÃ CẬP NHẬT) ===
@@ -588,6 +715,99 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCategoryChipsArea() {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      constraints: const BoxConstraints(minHeight: 60),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Wrap(
+        spacing: 8.0, // Khoảng cách ngang
+        runSpacing: 8.0, // Khoảng cách dọc
+        children: [
+          // Hiển thị các chip đã chọn
+          ..._selectedCategories
+              .map((category) => _buildCategoryChip(category))
+              .toList(),
+
+          // Nút "Thêm danh mục"
+          // Chỉ hiển thị khi CHƯA đạt giới hạn
+          if (_selectedCategories.length < _maxCategories)
+            InkWell(
+              onTap: _showCategoryDialog, // Mở dialog chọn
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(20), // Bo tròn
+                  border: Border.all(
+                    color: Colors.grey.shade400,
+                    style: BorderStyle.solid,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add, size: 16, color: Colors.grey.shade700),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Thêm',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // === WIDGET MỚI: HIỂN THỊ CHIP DANH MỤC (X bên trái) === // <<< THÊM MỚI
+  Widget _buildCategoryChip(CategoryModel category) {
+    // Tái sử dụng thiết kế "X bên trái" mà bạn thích
+    return Container(
+      padding: const EdgeInsets.only(left: 6, right: 10, top: 6, bottom: 6),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade100,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Nút X (bên trái)
+          InkWell(
+            onTap: () => _removeCategory(category),
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.all(2.0),
+              child: Icon(Icons.close, size: 14, color: Colors.orange.shade800),
+            ),
+          ),
+          const SizedBox(width: 4),
+          // Tên danh mục
+          Text(
+            category.name,
+            style: TextStyle(
+              color: Colors.orange.shade900,
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

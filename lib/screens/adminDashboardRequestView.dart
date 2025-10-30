@@ -15,6 +15,17 @@ class AdminDashBoardRequestView extends StatefulWidget {
 class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  @override
+  void initState() {
+    super.initState(); // Luôn gọi hàm này đầu tiên
+
+    // Tự động chạy hàm seed khi Admin vào trang.
+    // Vì hàm seedCategories() của bạn đã có logic kiểm tra (query.docs.isEmpty),
+    // nên nó sẽ tự động bỏ qua nếu dữ liệu đã tồn tại.
+    // Nó sẽ chỉ thêm dữ liệu vào lần đầu tiên trang này được tải.
+    //seedCategories();
+  }
+
   // --- Hàm Duyệt ---
   Future<void> _approveSubmission(DocumentSnapshot submission) async {
     final String submissionId = submission.id;
@@ -31,6 +42,9 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
       }
       return;
     }
+
+    final List<dynamic> categoryIds =
+        placeData['categories'] as List<dynamic>? ?? [];
 
     // Hiển thị loading
     if (mounted) {
@@ -65,6 +79,16 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
           .doc(); // Firestore tự tạo ID
       batch.set(newPlaceRef, finalPlaceData);
 
+      for (final categoryId in categoryIds) {
+        if (categoryId is String) {
+          // Đảm bảo ID là String
+          final catRef = _firestore.collection('categories').doc(categoryId);
+
+          // Thêm lệnh update count vào batch
+          batch.update(catRef, {'count': FieldValue.increment(1)});
+        }
+      }
+
       await batch.commit();
 
       if (mounted) {
@@ -83,6 +107,69 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
       }
     }
   }
+
+  // Future<void> seedCategories() async {
+  //   final firestore = FirebaseFirestore.instance;
+  //   final categoriesCol = firestore.collection('categories');
+  //   print('Bắt đầu quá trình tạo dữ liệu (seed) categories...');
+
+  //   // 1. Danh sách các danh mục bạn muốn thêm
+  //   final categoriesToSeed = [
+  //     'Ẩm thực',
+  //     'Du lịch',
+  //     'Check-in',
+  //     'Văn hóa',
+  //     'Giải trí',
+  //     'Cà phê',
+  //     'Mua sắm',
+  //     'Di tích lịch sử',
+  //     'Thiên nhiên',
+  //     'View đẹp',
+  //     'Mì cay',
+  //     'Hải sản',
+  //     'Đặc sản vùng miền',
+  //     'Quán ăn vặt',
+  //     'Nhà hàng sang trọng',
+  //     'Quán cà phê sách',
+  //     'Quán bar',
+  //     'Công viên',
+  //     'Bãi biển',
+  //     'Núi non',
+  //   ];
+
+  //   // 2. Dùng Batch Write để thêm tất cả 1 lúc
+  //   final batch = firestore.batch();
+  //   int addedCount = 0;
+
+  //   for (final name in categoriesToSeed) {
+  //     // 3. Kiểm tra xem tên này đã tồn tại chưa (để tránh chạy nhầm 2 lần)
+  //     final query = await categoriesCol
+  //         .where('name', isEqualTo: name)
+  //         .limit(1)
+  //         .get();
+
+  //     if (query.docs.isEmpty) {
+  //       // 4. Nếu chưa có, thêm vào batch
+  //       final docRef = categoriesCol.doc(); // Tự sinh DocumentID
+  //       batch.set(docRef, {
+  //         'name': name,
+  //         'count': 0, // Khởi tạo count = 0
+  //       });
+  //       print('  [Thêm vào batch]: $name');
+  //       addedCount++;
+  //     } else {
+  //       print('  [Bỏ qua, đã tồn tại]: $name');
+  //     }
+  //   }
+
+  //   // 5. Commit batch nếu có gì đó để thêm
+  //   if (addedCount > 0) {
+  //     await batch.commit();
+  //     print('✅ Hoàn tất! Đã thêm $addedCount danh mục mới.');
+  //   } else {
+  //     print('ℹ️ Không có danh mục nào mới để thêm (tất cả đã tồn tại).');
+  //   }
+  // }
 
   // --- Hàm Từ chối ---
   Future<void> _rejectSubmission(String submissionId) async {
