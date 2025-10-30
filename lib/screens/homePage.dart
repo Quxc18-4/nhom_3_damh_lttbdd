@@ -237,28 +237,37 @@ class _HomePageState extends State<HomePage> {
       const SizedBox(height: 6), // giảm khoảng cách cho sát hơn
 
       // Tabs
+      // Tabs
       DefaultTabController(
         length: 3,
         initialIndex: 0,
-        child: Column(
-          children: [
-            // --- Thanh tab trên ---
-           Container(
-              padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
-              child: Container(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16.0),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            children: [
+              // --- Thanh tab trên ---
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(40), // bo elip thanh nền
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
                 ),
                 child: TabBar(
                   isScrollable: true,
-                  tabAlignment: TabAlignment.start, 
+                  tabAlignment: TabAlignment.start,
                   padding: EdgeInsets.zero,
                   labelColor: Colors.blue.shade700,
-                  unselectedLabelColor: Colors.grey.shade800,
+                  unselectedLabelColor: Colors.teal.shade300,
                   indicator: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(30), // bo tròn đều kiểu elip
+                    borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.15),
@@ -291,20 +300,17 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
               ),
-            ),
 
-            // --- Danh sách hoạt động ---
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16.0),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                ),
-              ),
-              child: SizedBox(
+              // --- Lịch / hoạt động bên dưới ---
+              Container(
                 height: 180,
+                decoration: const BoxDecoration(
+                color: const Color(0xFFE3F2FD),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(20),
+                    bottomRight: Radius.circular(20),
+                  ),
+                ),
                 child: TabBarView(
                   physics: const NeverScrollableScrollPhysics(),
                   children: List.generate(3, (dayIndex) {
@@ -326,8 +332,8 @@ class _HomePageState extends State<HomePage> {
                   }),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     ],
