@@ -140,7 +140,6 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       // 1. Thực hiện Đăng nhập bằng Facebook
       final LoginResult result = await FacebookAuth.instance.login(
-        permissions: ['email', 'public_profile'],
       );
 
       if (result.status == LoginStatus.success) {

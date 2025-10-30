@@ -1,75 +1,78 @@
-// model/post_model.dart
+import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-// ⚡️ LƯU Ý: Bạn sẽ cần import 'cloud_firestore'
-//
-// nếu bạn dùng factory constructor .fromSnapshot
-import 'package:cloud_firestore/cloud_firestore.dart'; 
+// ===================================================================
+// 1. MODEL CLASSES
+// ===================================================================
 
 class User {
+  final String id;
   final String name;
   final String avatarUrl;
 
-  User({required this.name, required this.avatarUrl});
+  User({required this.id, required this.name, required this.avatarUrl});
+
+  factory User.empty() => User(
+      id: '',
+      name: 'Đang tải...',
+      avatarUrl: 'assets/images/default_avatar.png'
+  );
+
+  factory User.fromDoc(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    return User(
+      id: doc.id,
+      name: data['fullName'] ?? data['name'] ?? 'Người dùng',
+      avatarUrl: data['avatarUrl'] ?? 'assets/images/default_avatar.png',
+    );
+  }
 }
 
 class Post {
-  final String id; // <-- TRƯỜNG QUAN TRỌNG
-  final String authorId; // <-- TRƯỜNG QUAN TRỌNG
+  final String id;
   final User author;
-  final String timeAgo;
+  final String authorId;
   final String title;
   final String content;
+  final String timeAgo;
   final List<String> imageUrls;
   final List<String> tags;
-  final int likeCount;
+  int likeCount;
   final int commentCount;
+  bool isLikedByUser; // ✅ Thêm trạng thái like
 
   Post({
-    required this.id, // <-- THÊM
-    required this.authorId, // <-- THÊM
+    required this.id,
     required this.author,
-    required this.timeAgo,
+    required this.authorId,
     required this.title,
     required this.content,
+    required this.timeAgo,
     required this.imageUrls,
     required this.tags,
     required this.likeCount,
     required this.commentCount,
+    this.isLikedByUser = false,
   });
 
-  // (Tùy chọn) Factory constructor để build từ Firebase
-  // factory Post.fromSnapshot(DocumentSnapshot doc, User authorDetails) { ... }
-}
+  factory Post.fromDoc(DocumentSnapshot doc, User postAuthor, {bool isLiked = false}) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    final Timestamp timestamp = data['createdAt'] ?? Timestamp.now();
+    final DateTime postTime = timestamp.toDate();
+    final String formattedTime = DateFormat('dd/MM/yyyy, HH:mm').format(postTime);
 
-// ======================================================
-// === DỮ LIỆU ẢO (GIỮ LẠI THEO YÊU CẦU) ===
-// ======================================================
-final List<Post> samplePosts = [
-  Post(
-    id: "review_01_mock", // <-- ID ảo
-    authorId: "user_khoai_lang_thang_mock", // <-- ID tác giả ảo
-    author:
-        User(name: "Khoai Lang Thang", avatarUrl: "assets/images/facebook.png"),
-    timeAgo: "1h",
-    title: "Du lịch Sài Gòn – Cẩm nang kinh nghiệm từ A đến Z",
-    content:
-        "Nếu Hà Nội được biết đến là thủ đô ngàn năm văn hiến với vẻ đẹp yên bình,.... xem thêm",
-    imageUrls: ["assets/images/logo.png"], // Sửa lại path ảnh của bạn
-    tags: ["Blog", "#TPHCM", "#Tự Túc"],
-    likeCount: 2103,
-    commentCount: 50,
-  ),
-  Post(
-    id: "review_02_mock", // <-- ID ảo
-    authorId: "user_khoa_pug_mock", // <-- ID tác giả ảo
-    author: User(name: "Khoa Pug", avatarUrl: "assets/images/logo.png"), // Sửa path
-    timeAgo: "4h",
-    title: "Đà Lạt chào đón tôi bằng không khí se lạnh và những con đèo",
-    content:
-        "Thành phố mộng mơ, nơi thời gian như chậm lại giữa sương mù và rừng thông xanh.... xem thêm",
-    imageUrls: ["assets/images/logo.png", "assets/images/logo.png"], // Sửa path
-    tags: ["Review", "#ĐàLạt"],
-    likeCount: 8765,
-    commentCount: 120,
-  ),
-];
+    return Post(
+      id: doc.id,
+      author: postAuthor,
+      authorId: data['userId'] ?? '',
+      title: data['title'] ?? 'Không có tiêu đề',
+      content: data['comment'] ?? '',
+      timeAgo: formattedTime,
+      imageUrls: List<String>.from(data['imageUrls'] ?? []),
+      tags: List<String>.from(data['hashtags'] ?? []),
+      likeCount: data['likeCount'] ?? 0,
+      commentCount: data['commentCount'] ?? 0,
+      isLikedByUser: isLiked,
+    );
+  }
+}

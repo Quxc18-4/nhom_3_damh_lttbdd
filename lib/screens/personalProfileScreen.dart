@@ -2,90 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
+import 'package:nhom_3_damh_lttbdd/screens/checkinScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/accountSettingScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/albumTabContent.dart';
 import 'package:nhom_3_damh_lttbdd/screens/introductionTabContent.dart';
 import 'package:nhom_3_damh_lttbdd/screens/followingTabContent.dart';
+import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
+
 
 // ===================================================================
-// 1. MODEL CLASSES
+// LƯU Ý: ĐÃ XÓA KHỐI final List<Post> mockPosts KHỎI ĐÂY
 // ===================================================================
 
-class User {
-  final String id;
-  final String name;
-  final String avatarUrl;
-
-  User({required this.id, required this.name, required this.avatarUrl});
-
-  factory User.empty() => User(
-      id: '',
-      name: 'Đang tải...',
-      avatarUrl: 'assets/images/default_avatar.png'
-  );
-
-  factory User.fromDoc(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    return User(
-      id: doc.id,
-      name: data['fullName'] ?? data['name'] ?? 'Người dùng',
-      avatarUrl: data['avatarUrl'] ?? 'assets/images/default_avatar.png',
-    );
-  }
-}
-
-class Post {
-  final String id;
-  final User author;
-  final String authorId;
-  final String title;
-  final String content;
-  final String timeAgo;
-  final List<String> imageUrls;
-  final List<String> tags;
-  int likeCount; // ✅ Không final để có thể cập nhật
-  final int commentCount;
-  bool isLikedByUser; // ✅ Thêm trạng thái like
-
-  Post({
-    required this.id,
-    required this.author,
-    required this.authorId,
-    required this.title,
-    required this.content,
-    required this.timeAgo,
-    required this.imageUrls,
-    required this.tags,
-    required this.likeCount,
-    required this.commentCount,
-    this.isLikedByUser = false,
-  });
-
-  factory Post.fromDoc(DocumentSnapshot doc, User postAuthor, {bool isLiked = false}) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    final Timestamp timestamp = data['createdAt'] ?? Timestamp.now();
-    final DateTime postTime = timestamp.toDate();
-    final String formattedTime = DateFormat('dd/MM/yyyy, HH:mm').format(postTime);
-
-    return Post(
-      id: doc.id,
-      author: postAuthor,
-      authorId: data['userId'] ?? '', // ✅ Sửa từ 'authorId' thành 'userId'
-      title: data['title'] ?? 'Không có tiêu đề',
-      content: data['comment'] ?? '',
-      timeAgo: formattedTime,
-      imageUrls: List<String>.from(data['imageUrls'] ?? []),
-      tags: List<String>.from(data['hashtags'] ?? []),
-      likeCount: data['likeCount'] ?? 0,
-      commentCount: data['commentCount'] ?? 0,
-      isLikedByUser: isLiked,
-    );
-  }
-}
-
-// ===================================================================
-// 2. PERSONAL PROFILE SCREEN
-// ===================================================================
 
 class PersonalProfileScreen extends StatefulWidget {
   final String userId;
@@ -106,7 +34,6 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
   List<Post> _myPosts = [];
   bool _isLoading = true;
 
-  // ✅ Kiểm tra authentication
   bool get _isAuthenticated => auth.FirebaseAuth.instance.currentUser != null;
 
   @override
@@ -244,7 +171,7 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
           children: [
             _buildTimelineListView(),
             const IntroductionTabContent(),
-            AlbumTabContent(userId: widget.userId), // ✅ Truyền userId
+            AlbumTabContent(userId: widget.userId),
             const FollowingTabContent(),
           ],
         ),
@@ -396,6 +323,7 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
       padding: const EdgeInsets.all(8.0),
       itemCount: _myPosts.length,
       itemBuilder: (context, index) {
+        // ✅ GỌI CLASS TimelinePostCard đã được định nghĩa dưới đây
         return TimelinePostCard(
           post: _myPosts[index],
           userId: widget.userId,
@@ -404,16 +332,16 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
       },
     );
   }
-}
+} // End of _PersonalProfileScreenState
 
 // ===================================================================
-// 3. TIMELINE POST CARD (Stateful để xử lý like)
+// 3. TIMELINE POST CARD (Stateful để xử lý like) - ĐÃ TÁCH RA
 // ===================================================================
 
 class TimelinePostCard extends StatefulWidget {
   final Post post;
   final String userId;
-  final VoidCallback onPostUpdated;
+  final VoidCallback onPostUpdated; // ✅ Giữ nguyên
 
   const TimelinePostCard({
     Key? key,
@@ -427,6 +355,8 @@ class TimelinePostCard extends StatefulWidget {
 }
 
 class _TimelinePostCardState extends State<TimelinePostCard> {
+  // Lỗi "The method 'onPostUpdated' isn't defined for the type 'PersonalProfileScreen'"
+  // đã được sửa vì nó nằm trong widget, không phải class cha.
   late bool _isLiked;
   late int _likeCount;
   bool _isProcessing = false;
@@ -456,55 +386,33 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
       _isProcessing = true;
     });
 
-    final reviewRef = FirebaseFirestore.instance
-        .collection('reviews')
-        .doc(widget.post.id);
+    final reviewRef = FirebaseFirestore.instance.collection('reviews').doc(widget.post.id);
     final likeRef = reviewRef.collection('likes').doc(widget.userId);
 
     try {
       if (_isLiked) {
-        // Unlike
         await likeRef.delete();
         await reviewRef.update({'likeCount': FieldValue.increment(-1)});
-
-        if (mounted) {
-          setState(() {
-            _isLiked = false;
-            _likeCount--;
-            _isProcessing = false;
-          });
-        }
       } else {
-        // Like
-        await likeRef.set({
-          'userId': widget.userId,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+        await likeRef.set({'createdAt': FieldValue.serverTimestamp()});
         await reviewRef.update({'likeCount': FieldValue.increment(1)});
-
-        if (mounted) {
-          setState(() {
-            _isLiked = true;
-            _likeCount++;
-            _isProcessing = false;
-          });
-        }
       }
+
+      // Gọi hàm cập nhật dữ liệu của Profile Screen
+      widget.onPostUpdated();
     } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Lỗi: $e"), backgroundColor: Colors.red),
+      );
+    } finally {
       if (mounted) {
         setState(() {
           _isProcessing = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Lỗi: $e"),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
-      print("Lỗi toggle like: $e");
     }
   }
+
 
   Widget _getPostImage() {
     if (widget.post.imageUrls.isEmpty) return const SizedBox.shrink();
@@ -534,9 +442,7 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
         errorBuilder: (context, error, stackTrace) => Container(
           height: 200,
           color: Colors.grey[200],
-          child: const Center(
-            child: Icon(Icons.error_outline, color: Colors.red),
-          ),
+          child: const Center(child: Icon(Icons.error_outline, color: Colors.red)),
         ),
       );
     }
@@ -643,12 +549,10 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
       ),
     );
   }
-}
+} // End of TimelinePostCard
 
-// ===================================================================
-// 4. SLIVER APP BAR DELEGATE
-// ===================================================================
 
+// Lớp Helper để giữ TabBar "dính" lại khi cuộn
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar _tabBar;
 

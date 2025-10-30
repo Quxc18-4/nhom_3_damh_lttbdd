@@ -1,30 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart'; // ✅ Mới
+import 'dart:io'; // ✅ Mới
+import 'package:nhom_3_damh_lttbdd/services/cloudinary_service.dart'; // ✅ Mới
 
 class AccountSettingScreen extends StatefulWidget {
   final String userId;
 
   const AccountSettingScreen({Key? key, required this.userId})
-    : super(key: key);
+      : super(key: key);
 
   @override
   State<AccountSettingScreen> createState() => _AccountSettingScreenState();
 }
 
 class _AccountSettingScreenState extends State<AccountSettingScreen> {
-  // Thêm controller cho fullName
+  // --- CONTROLLERS VÀ SERVICES ---
   final _nicknameController = TextEditingController();
-  final _fullNameController = TextEditingController(); // (MỚI)
+  final _fullNameController = TextEditingController();
   final _bioController = TextEditingController();
   final _cityController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
+  final CloudinaryService _cloudinaryService = CloudinaryService(); // ✅ Khởi tạo Cloudinary
 
+  // --- STATES ---
   DateTime? _selectedDate;
   String? _selectedGender;
   bool _isLoading = true;
-  bool _isEditingNickname = false; // (MỚI) State để kiểm soát việc sửa nickname
+  bool _isEditingNickname = false;
+
+  String _currentAvatarUrl = "assets/images/default_avatar.png"; // ✅ URL ảnh đại diện hiện tại
+  File? _newAvatarFile; // ✅ File ảnh cục bộ mới được chọn
+  bool _isUploadingAvatar = false; // ✅ Theo dõi trạng thái upload
 
   @override
   void initState() {
@@ -43,13 +53,22 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
     super.dispose();
   }
 
+  // Hàm tiện ích
+  void _showSnackBar(String message, {Color color = Colors.black87}) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: color),
+      );
+    }
+  }
+
   Widget _buildGroupContainer({required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white, // Nền trắng
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300), // Viền xám
+        border: Border.all(color: Colors.grey.shade300),
       ),
       child: child,
     );
@@ -68,8 +87,7 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
         final data = docSnapshot.data()!;
         setState(() {
           _nicknameController.text = data['name'] ?? '';
-          _fullNameController.text =
-              data['fullName'] ?? ''; // (MỚI) Lấy fullName
+          _fullNameController.text = data['fullName'] ?? '';
           _emailController.text = data['email'] ?? '';
           _bioController.text = data['bio'] ?? '';
           _cityController.text = data['city'] ?? '';
@@ -78,6 +96,8 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
           if (data['birthDate'] != null) {
             _selectedDate = (data['birthDate'] as Timestamp).toDate();
           }
+          // ✅ LẤY AVATAR URL HIỆN TẠI
+          _currentAvatarUrl = data['avatarUrl'] ?? "assets/images/default_avatar.png";
         });
       }
     } finally {
@@ -87,14 +107,10 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
     }
   }
 
-  // (MỚI) Hàm chỉ để cập nhật nickname
   Future<void> _updateNickname() async {
-    // (Sau này bạn có thể thêm logic check trùng nickname ở đây)
     final newNickname = _nicknameController.text.trim();
     if (newNickname.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nickname không được để trống.')),
-      );
+      _showSnackBar('Nickname không được để trống.', color: Colors.red);
       return;
     }
     await FirebaseFirestore.instance
@@ -104,10 +120,102 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
     setState(() {
       _isEditingNickname = false;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cập nhật Nickname thành công!')),
+    _showSnackBar('Cập nhật Nickname thành công!', color: Colors.green);
+  }
+
+  // ✅ HÀM XỬ LÝ TẢI AVATAR LÊN CLOUDINARY VÀ CẬP NHẬT FIRESTORE
+  Future<void> _handleAvatarChange(ImageSource source) async {
+    Navigator.pop(context); // Đóng BottomSheet chọn nguồn
+    final XFile? image = await _picker.pickImage(source: source);
+    if (image == null) return;
+
+    setState(() {
+      _newAvatarFile = File(image.path); // Hiển thị ảnh cục bộ mới ngay lập tức
+      _isUploadingAvatar = true;
+    });
+
+    try {
+      final uploadedUrl = await _cloudinaryService.uploadImageToCloudinary(_newAvatarFile!);
+
+      if (uploadedUrl != null) {
+        // ✅ BƯỚC 2: CẬP NHẬT avatarUrl MỚI VÀO FIRESTORE
+        await FirebaseFirestore.instance.collection('users').doc(widget.userId).update({
+          'avatarUrl': uploadedUrl,
+        });
+
+        // Cập nhật state cục bộ để hiển thị ảnh mới và URL mới
+        setState(() {
+          _currentAvatarUrl = uploadedUrl;
+          _newAvatarFile = null;
+        });
+        _showSnackBar('Cập nhật ảnh đại diện thành công!', color: Colors.green);
+      } else {
+        _showSnackBar('Tải ảnh lên thất bại. Vui lòng thử lại.', color: Colors.red);
+      }
+    } catch (e) {
+      _showSnackBar('Lỗi hệ thống khi upload: $e', color: Colors.red);
+      print("Lỗi upload avatar: $e");
+    } finally {
+      setState(() {
+        _isUploadingAvatar = false;
+        if (_newAvatarFile != null) _newAvatarFile = null; // Reset nếu upload thất bại
+      });
+    }
+  }
+
+  // ✅ BOTTOM SHEET CHỌN NGUỒN ẢNH
+  void _showAvatarSourceDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Chọn từ thư viện'),
+              onTap: () => _handleAvatarChange(ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Chụp ảnh mới'),
+              onTap: () => _handleAvatarChange(ImageSource.camera),
+            ),
+            if (_currentAvatarUrl.startsWith('http') && !_isUploadingAvatar)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Xóa ảnh đại diện', style: TextStyle(color: Colors.red)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _deleteAvatar();
+                },
+              ),
+          ],
+        ),
+      ),
     );
   }
+
+  // ✅ HÀM XÓA AVATAR
+  Future<void> _deleteAvatar() async {
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(widget.userId).update({
+        'avatarUrl': FieldValue.delete(), // Xóa trường avatarUrl
+      });
+      setState(() {
+        _currentAvatarUrl = "assets/images/default_avatar.png";
+      });
+      _showSnackBar('Đã xóa ảnh đại diện.', color: Colors.green);
+    } catch (e) {
+      _showSnackBar('Không thể xóa ảnh: $e', color: Colors.red);
+    }
+  }
+
 
   // Hàm cập nhật các thông tin còn lại
   Future<void> _updateGeneralUserData() async {
@@ -122,30 +230,20 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
           .collection('users')
           .doc(widget.userId)
           .update({
-            'fullName': _fullNameController.text.trim(),
-            'bio': _bioController.text.trim(),
-            'city': _cityController.text.trim(),
-            'phoneNumber': _phoneController.text.trim(),
-            'birthDate': _selectedDate,
-            'gender': _selectedGender ?? '',
-          });
-
-      // --- THAY ĐỔI CHÍNH Ở ĐÂY ---
-      // Yêu cầu Flutter build lại giao diện sau khi đã lưu
-      setState(() {
-        // Lệnh setState rỗng này đủ để yêu cầu Flutter
-        // cập nhật lại UI dựa trên trạng thái mới của các controller.
+        'fullName': _fullNameController.text.trim(),
+        'bio': _bioController.text.trim(),
+        'city': _cityController.text.trim(),
+        'phoneNumber': _phoneController.text.trim(),
+        'birthDate': _selectedDate != null ? Timestamp.fromDate(_selectedDate!) : null,
+        'gender': _selectedGender ?? '',
       });
 
       Navigator.of(context).pop(); // Tắt loading
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cập nhật thông tin thành công!')),
-      );
+      _showSnackBar('Cập nhật thông tin thành công!', color: Colors.green);
+
     } catch (e) {
       Navigator.of(context).pop(); // Tắt loading
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Cập nhật thất bại: $e')));
+      _showSnackBar('Cập nhật thất bại: $e', color: Colors.red);
     }
   }
 
@@ -164,15 +262,12 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
   }
 
   Future<void> _deletePhoneNumber() async {
-    // Hiển thị dialog xác nhận
     bool? confirmDelete = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Xác nhận xóa'),
-          content: const Text(
-            'Bạn có chắc chắn muốn xóa số điện thoại này không?',
-          ),
+          content: const Text('Bạn có chắc chắn muốn xóa số điện thoại này không?'),
           actions: <Widget>[
             TextButton(
               child: const Text('Hủy'),
@@ -187,33 +282,25 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
       },
     );
 
-    // Nếu người dùng xác nhận xóa
     if (confirmDelete == true) {
       try {
-        // Cập nhật trường phoneNumber thành rỗng trên Firestore
         await FirebaseFirestore.instance
             .collection('users')
             .doc(widget.userId)
-            .update({'phoneNumber': ''});
+            .update({'phoneNumber': FieldValue.delete()}); // Dùng FieldValue.delete
 
-        // Cập nhật lại giao diện
         setState(() {
           _phoneController.clear();
         });
 
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Đã xóa số điện thoại.')));
+        _showSnackBar('Đã xóa số điện thoại.', color: Colors.green);
       } catch (e) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Xóa thất bại: $e')));
+        _showSnackBar('Xóa thất bại: $e', color: Colors.red);
       }
     }
   }
 
-  // --- GIAO DIỆN ---
-  // Thay thế toàn bộ hàm build() trong file accountSettingScreen.dart
+  // --- GIAO DIỆN BUILD ---
 
   @override
   Widget build(BuildContext context) {
@@ -239,143 +326,161 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
         ),
       ),
 
-      // --- THAY ĐỔI CHÍNH: BỎ bottomNavigationBar VÀ DÙNG STACK ---
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Stack(
-              // BƯỚC 1: BỌC TOÀN BỘ BODY TRONG MỘT STACK
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+            child: Column(
               children: [
-                // BƯỚC 2: PHẦN NỘI DUNG CHÍNH (NẰM DƯỚI CÙNG)
-                SingleChildScrollView(
-                  // NOTE 1: Tăng padding dưới để item cuối không bị che bởi nút
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                  child: Column(
-                    children: [
-                      _buildAvatarSection(),
-                      const SizedBox(height: 24),
-                      _buildPersonalDataSection(context),
-                      const SizedBox(height: 24),
-                      _buildEmailSection(),
-                      const SizedBox(height: 24),
-                      _buildPhoneSection(),
-                      const SizedBox(height: 24),
-                      _buildLinkedAccountsSection(),
-                    ],
-                  ),
-                ),
-
-                // BƯỚC 3: LỚP NỀN MỜ (NẰM TRÊN NỘI DUNG, DƯỚI NÚT BẤM)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: 120, // Chiều cao của vùng mờ
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.grey[50]!.withOpacity(
-                            0.0,
-                          ), // Bắt đầu trong suốt
-                          Colors.grey[50]!, // Kết thúc với màu nền
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                  ),
-                ),
-
-                // BƯỚC 4: NÚT BẤM (NẰM TRÊN CÙNG)
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  // NOTE 2: Vị trí của nút so với cạnh dưới
-                  bottom: 12 + MediaQuery.of(context).padding.bottom,
-                  child: ElevatedButton(
-                    onPressed: _updateGeneralUserData,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade700,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      'Lưu thay đổi',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
+                _buildAvatarSection(),
+                const SizedBox(height: 24),
+                _buildPersonalDataSection(context),
+                const SizedBox(height: 24),
+                _buildEmailSection(),
+                const SizedBox(height: 24),
+                _buildPhoneSection(),
+                const SizedBox(height: 24),
+                _buildLinkedAccountsSection(),
               ],
             ),
+          ),
+
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 120,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.grey[50]!.withOpacity(0.0),
+                    Colors.grey[50]!,
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ),
+
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 12 + MediaQuery.of(context).padding.bottom,
+            child: ElevatedButton(
+              onPressed: _updateGeneralUserData,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue.shade700,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Lưu thay đổi',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  // --- CÁC WIDGET CON ĐỂ XÂY DỰNG GIAO DIỆN ---
-
+  // ✅ THAY THẾ: WIDGET XỬ LÝ AVATAR MỚI
   Widget _buildAvatarSection() {
+    ImageProvider _getAvatarProvider() {
+      // 1. Nếu có ảnh cục bộ mới (chưa upload)
+      if (_newAvatarFile != null) {
+        return FileImage(_newAvatarFile!);
+      }
+      // 2. Nếu có URL ảnh mạng (đã upload)
+      if (_currentAvatarUrl.startsWith('http')) {
+        return NetworkImage(_currentAvatarUrl);
+      }
+      // 3. Ảnh mặc định
+      return const AssetImage("assets/images/logo.png"); // Dùng logo làm mặc định
+    }
+
     return Column(
       children: [
-        Stack(
-          alignment: Alignment.bottomRight,
-          children: [
-            const CircleAvatar(
-              radius: 50,
-              backgroundImage: AssetImage("assets/images/logo.png"),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.blue,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
+        GestureDetector(
+          onTap: _isUploadingAvatar ? null : _showAvatarSourceDialog, // Mở dialog chọn nguồn ảnh
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Ảnh đại diện
+              CircleAvatar(
+                radius: 50,
+                backgroundImage: _getAvatarProvider(),
+                backgroundColor: Colors.grey.shade200,
+                child: _isUploadingAvatar
+                    ? Center(
+                  child: CircularProgressIndicator(
+                      color: Colors.blue.shade700
+                  ),
+                )
+                    : null,
               ),
-              child: const Padding(
-                padding: EdgeInsets.all(4.0),
-                child: Icon(Icons.camera_alt, color: Colors.white, size: 16),
+              // Icon camera/chỉnh sửa
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.blue,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4.0),
+                    child: Icon(Icons.camera_alt, color: Colors.white, size: 16),
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 8),
-        // THAY ĐỔI: Sử dụng Row để căn giữa nickname và nút sửa một cách linh hoạt
+
+        // --- NICKNAME VÀ BIO ---
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Spacer để đẩy nội dung vào giữa
             const Spacer(flex: 2),
-            // Nickname sẽ co giãn ở giữa
             Expanded(
               flex: 3,
               child: _isEditingNickname
                   ? TextField(
-                      controller: _nicknameController,
-                      textAlign: TextAlign.center,
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    )
+                controller: _nicknameController,
+                textAlign: TextAlign.center,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              )
                   : Text(
-                      '@${_nicknameController.text}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                '@${_nicknameController.text}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
-            // Nút sửa nằm ở bên phải, chiếm một phần không gian
             Expanded(
               flex: 2,
               child: Align(
@@ -385,7 +490,7 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
                     _isEditingNickname ? Icons.check_circle : Icons.edit,
                     color: Colors.blue,
                   ),
-                  onPressed: () {
+                  onPressed: _isUploadingAvatar ? null : () {
                     if (_isEditingNickname) {
                       _updateNickname();
                     } else {
@@ -472,7 +577,7 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none, // Bỏ viền trong
+                    borderSide: BorderSide.none,
                   ),
                 ),
               ),
@@ -483,7 +588,6 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
     );
   }
 
-  // (THAY ĐỔI) Logic hiển thị và xóa số điện thoại
   Widget _buildPhoneSection() {
     bool hasPhone = _phoneController.text.isNotEmpty;
     return Column(
@@ -499,12 +603,10 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
               ),
               const SizedBox(height: 8),
 
-              // --- THAY ĐỔI CHÍNH: SỬ DỤNG STACK ĐỂ ĐẶT NÚT LÊN TRÊN ---
               Stack(
                 alignment:
-                    Alignment.centerRight, // Căn chỉnh icon về phía bên phải
+                Alignment.centerRight,
                 children: [
-                  // Lớp dưới: Khung nhập liệu chiếm toàn bộ chiều rộng
                   TextFormField(
                     controller: _phoneController,
                     enabled: !hasPhone,
@@ -513,7 +615,6 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
                       hintText: "Chưa có Số di động",
                       filled: true,
                       fillColor: hasPhone ? Colors.grey.shade200 : Colors.white,
-                      // Không còn suffixIcon ở đây nữa
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 10,
@@ -527,7 +628,6 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
                     ),
                   ),
 
-                  // Lớp trên: Icon thùng rác, chỉ hiển thị khi có SĐT
                   if (hasPhone)
                     IconButton(
                       onPressed: _deletePhoneNumber,
@@ -547,19 +647,16 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
       children: [
         _buildSectionHeader("Liên kết tài khoản", "", () {}),
         _buildGroupContainer(
-          // THAY ĐỔI: Bọc nội dung trong SizedBox để có chiều cao tối thiểu
           child: SizedBox(
-            width: double.infinity, // Đảm bảo SizedBox chiếm hết chiều rộng
-            height: 50, // Đặt chiều cao mong muốn
+            width: double.infinity,
+            height: 50,
             child: Column(
-              mainAxisAlignment:
-                  MainAxisAlignment.center, // Căn giữa theo chiều dọc
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Text(
                   "Tính năng đang được phát triển.",
                   style: TextStyle(color: Colors.grey),
                 ),
-                // (Sau này bạn có thể thêm các nút liên kết ở đây)
               ],
             ),
           ),
@@ -569,10 +666,10 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
   }
 
   Widget _buildSectionHeader(
-    String title,
-    String actionText,
-    VoidCallback onActionTap,
-  ) {
+      String title,
+      String actionText,
+      VoidCallback onActionTap,
+      ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
@@ -590,10 +687,10 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
   }
 
   Widget _buildLabeledTextField(
-    String label,
-    TextEditingController controller, {
-    String hint = "",
-  }) {
+      String label,
+      TextEditingController controller, {
+        String hint = "",
+      }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -632,7 +729,7 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
             padding: const EdgeInsets.symmetric(
               horizontal: 12,
               vertical: 14,
-            ), // Tăng padding
+            ),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(8),
@@ -671,7 +768,7 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 12,
               vertical: 4,
-            ), // Điều chỉnh padding
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(color: Colors.grey.shade400),
@@ -680,7 +777,7 @@ class _AccountSettingScreenState extends State<AccountSettingScreen> {
           items: ["Nam", "Nữ", "Khác"]
               .map(
                 (label) => DropdownMenuItem(value: label, child: Text(label)),
-              )
+          )
               .toList(),
           onChanged: (value) {
             setState(() {

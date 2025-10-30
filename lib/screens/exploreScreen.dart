@@ -4,86 +4,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:nhom_3_damh_lttbdd/screens/checkinScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/personalProfileScreen.dart';
+// ✅ IMPORT MODEL TỪ FILE ĐỘC LẬP
+import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
+// ✅ IMPORT MÀN HÌNH COMMENT
+import 'package:nhom_3_damh_lttbdd/screens/commentScreen.dart';
+
 
 // ===================================================================
-// 1. MODEL CLASSES
+// LƯU Ý: ĐÃ XÓA ĐỊNH NGHĨA MODEL USER VÀ POST TRÙNG LẶP KHỎI FILE NÀY
 // ===================================================================
 
-class User {
-  final String id;
-  final String name;
-  final String avatarUrl;
-
-  User({required this.id, required this.name, required this.avatarUrl});
-
-  factory User.empty() => User(
-      id: '',
-      name: 'Đang tải...',
-      avatarUrl: 'assets/images/default_avatar.png'
-  );
-
-  factory User.fromDoc(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    return User(
-      id: doc.id,
-      name: data['fullName'] ?? data['name'] ?? 'Người dùng',
-      avatarUrl: data['avatarUrl'] ?? 'assets/images/default_avatar.png',
-    );
-  }
-}
-
-class Post {
-  final String id;
-  final User author;
-  final String authorId;
-  final String title;
-  final String content;
-  final String timeAgo;
-  final List<String> imageUrls;
-  final List<String> tags;
-  int likeCount;
-  final int commentCount;
-  bool isLikedByUser; // ✅ Thêm trạng thái like
-
-  Post({
-    required this.id,
-    required this.author,
-    required this.authorId,
-    required this.title,
-    required this.content,
-    required this.timeAgo,
-    required this.imageUrls,
-    required this.tags,
-    required this.likeCount,
-    required this.commentCount,
-    this.isLikedByUser = false,
-  });
-
-  factory Post.fromDoc(DocumentSnapshot doc, User postAuthor, {bool isLiked = false}) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    final Timestamp timestamp = data['createdAt'] ?? Timestamp.now();
-    final DateTime postTime = timestamp.toDate();
-    final String formattedTime = DateFormat('dd/MM/yyyy, HH:mm').format(postTime);
-
-    return Post(
-      id: doc.id,
-      author: postAuthor,
-      authorId: data['userId'] ?? '',
-      title: data['title'] ?? 'Không có tiêu đề',
-      content: data['comment'] ?? '',
-      timeAgo: formattedTime,
-      imageUrls: List<String>.from(data['imageUrls'] ?? []),
-      tags: List<String>.from(data['hashtags'] ?? []),
-      likeCount: data['likeCount'] ?? 0,
-      commentCount: data['commentCount'] ?? 0,
-      isLikedByUser: isLiked,
-    );
-  }
-}
-
-// ===================================================================
-// 2. EXPLORE SCREEN
-// ===================================================================
 
 class ExploreScreen extends StatefulWidget {
   final String userId;
@@ -106,7 +36,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
   String _userAvatarUrl = "assets/images/default_avatar.png";
   bool _isUserDataLoading = true;
 
-  // ✅ Helper để kiểm tra authentication
   bool get _isAuthenticated => auth.FirebaseAuth.instance.currentUser != null;
 
   @override
@@ -123,7 +52,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
     super.dispose();
   }
 
-  // Fetch user data
   Future<void> _fetchUserData() async {
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance
@@ -155,7 +83,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
     }
   }
 
-  // ✅ Fetch posts với kiểm tra trạng thái like
   Future<void> _fetchPosts() async {
     if (!mounted) return;
     setState(() {
@@ -218,7 +145,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
           }
         }
 
-        // ✅ Kiểm tra user đã like bài viết chưa (chỉ khi đã đăng nhập)
         bool isLiked = false;
         if (_isAuthenticated) {
           try {
@@ -259,7 +185,6 @@ class _ExploreScreenState extends State<ExploreScreen> with SingleTickerProvider
     }
   }
 
-  // ✅ Kiểm tra auth trước khi tạo bài viết
   void _showCreatePostOptions() {
     if (!_isAuthenticated) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -595,8 +520,8 @@ class _PostCardState extends State<PostCard> {
         }
       } else {
         // Like - Tạo document trong subcollection likes
+        // Data KHÔNG cần trường userId vì likeId == request.auth.uid (theo Rules)
         await likeRef.set({
-          'userId': widget.userId,
           'createdAt': FieldValue.serverTimestamp(),
         });
         await reviewRef.update({'likeCount': FieldValue.increment(1)});
@@ -655,6 +580,35 @@ class _PostCardState extends State<PostCard> {
       },
     );
   }
+
+  // ✅ Mở màn hình Comment (đã tích hợp)
+  void _showCommentScreen(BuildContext context) {
+    if (auth.FirebaseAuth.instance.currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Bạn cần đăng nhập để xem/bình luận!"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return CommentScreen(
+          reviewId: widget.post.id,
+          post: widget.post,
+        );
+      },
+    ).then((_) {
+      // Tải lại bài viết để cập nhật số lượng comment (nếu cần)
+      widget.onPostUpdated();
+    });
+  }
+
 
   ImageProvider _getAuthorAvatar() {
     if (widget.post.author.avatarUrl.startsWith('http')) {
@@ -892,9 +846,7 @@ class _PostCardState extends State<PostCard> {
               _buildActionButton(
                 icon: Icons.chat_bubble_outline,
                 text: widget.post.commentCount.toString(),
-                onPressed: () {
-                  // TODO: Mở màn hình comment
-                },
+                onPressed: () => _showCommentScreen(context), // ✅ GỌI COMMENT SCREEN
               ),
               _buildActionButton(
                 icon: Icons.share_outlined,
