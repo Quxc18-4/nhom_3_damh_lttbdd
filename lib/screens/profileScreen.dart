@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Thêm import này
 import 'package:nhom_3_damh_lttbdd/screens/settingAccountScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/accountSettingScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/journeyMapScreen.dart';
 
 // --- BƯỚC 1: CHUYỂN THÀNH STATEFULWIDGET VÀ NHẬN userId ---
 class ProfileScreen extends StatefulWidget {
@@ -86,8 +87,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _buildMenuItem(
                       icon: Icons.map_outlined,
                       title: "Bản đồ hành trình",
-                      onTap: () =>
-                          _showFeatureComingSoon(context, "Bản đồ hành trình"),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            // Gọi JourneyMapScreen và truyền userId hiện tại
+                            builder: (context) =>
+                                JourneyMapScreen(userId: widget.userId),
+                          ),
+                        );
+                      },
                     ),
                     _buildMenuItem(
                       icon: Icons.description_outlined,
