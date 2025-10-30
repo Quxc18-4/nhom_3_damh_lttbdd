@@ -16,7 +16,8 @@ import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
 class PersonalProfileScreen extends StatefulWidget {
   final String userId;
 
-  const PersonalProfileScreen({Key? key, required this.userId}) : super(key: key);
+  const PersonalProfileScreen({Key? key, required this.userId})
+    : super(key: key);
 
   @override
   State<PersonalProfileScreen> createState() => _PersonalProfileScreenState();
@@ -28,6 +29,7 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
   User _currentUser = User.empty();
   List<Post> _myPosts = [];
   bool _isLoading = true;
+  Map<String, dynamic>? _userDataMap;
 
   // ✅ Follow/Unfollow state
   bool _isMyProfile = false;
@@ -81,6 +83,12 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
       if (userDoc.exists) {
         _currentUser = User.fromDoc(userDoc);
         final data = userDoc.data() as Map<String, dynamic>? ?? {};
+
+        if (mounted) {
+          setState(() {
+            _userDataMap = data; // Lưu data vào biến state
+          });
+        }
 
         // 3. Lấy follow counts
         int followers = data['followersCount'] ?? -1;
@@ -177,7 +185,9 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
           .get();
 
       List<Post> fetchedPosts = [];
-      final postAuthor = _currentUser.id.isNotEmpty ? _currentUser : User.empty();
+      final postAuthor = _currentUser.id.isNotEmpty
+          ? _currentUser
+          : User.empty();
 
       for (var reviewDoc in reviewSnapshot.docs) {
         // ✅ Kiểm tra like status
@@ -255,8 +265,12 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
         // UNFOLLOW
         await authUserFollowingRef.delete();
         await profileUserFollowerRef.delete();
-        await authUserDocRef.update({'followingCount': FieldValue.increment(-1)});
-        await profileUserDocRef.update({'followersCount': FieldValue.increment(-1)});
+        await authUserDocRef.update({
+          'followingCount': FieldValue.increment(-1),
+        });
+        await profileUserDocRef.update({
+          'followersCount': FieldValue.increment(-1),
+        });
 
         if (mounted) {
           setState(() {
@@ -275,8 +289,12 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
           'followedAt': timestamp,
           'userId': _currentAuthUserId!,
         });
-        await authUserDocRef.update({'followingCount': FieldValue.increment(1)});
-        await profileUserDocRef.update({'followersCount': FieldValue.increment(1)});
+        await authUserDocRef.update({
+          'followingCount': FieldValue.increment(1),
+        });
+        await profileUserDocRef.update({
+          'followersCount': FieldValue.increment(1),
+        });
 
         if (mounted) {
           setState(() {
@@ -343,9 +361,18 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
           controller: _tabController,
           children: [
             _buildTimelineListView(),
-            const IntroductionTabContent(),
+            IntroductionTabContent(
+              userData: _userDataMap,
+              userPosts: _myPosts,
+              isMyProfile: _isMyProfile,
+              userId: widget.userId,
+            ),
             AlbumTabContent(userId: widget.userId),
-            const FollowingTabContent(),
+            FollowingTabContent(
+              userId: widget.userId, // ID của profile đang xem
+              currentAuthUserId: _currentAuthUserId, // ID của user đang login
+              isMyProfile: _isMyProfile, // Có phải profile của tôi không
+            ),
           ],
         ),
       ),
@@ -386,7 +413,8 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => AccountSettingScreen(userId: widget.userId),
+                          builder: (context) =>
+                              AccountSettingScreen(userId: widget.userId),
                         ),
                       );
                     },
@@ -424,7 +452,10 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
                 Expanded(
                   child: Text(
                     user.name,
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -437,7 +468,10 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
               alignment: Alignment.centerLeft,
               child: Text(
                 user.name,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
 
@@ -468,7 +502,8 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => CheckinScreen(currentUserId: widget.userId),
+                          builder: (context) =>
+                              CheckinScreen(currentUserId: widget.userId),
                         ),
                       );
                     },
@@ -486,7 +521,8 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => CheckinScreen(currentUserId: widget.userId),
+                          builder: (context) =>
+                              CheckinScreen(currentUserId: widget.userId),
                         ),
                       );
                     },
@@ -638,7 +674,9 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
       _likeCount += _isLiked ? 1 : -1;
     });
 
-    final reviewRef = FirebaseFirestore.instance.collection('reviews').doc(widget.post.id);
+    final reviewRef = FirebaseFirestore.instance
+        .collection('reviews')
+        .doc(widget.post.id);
     final likeRef = reviewRef.collection('likes').doc(widget.currentAuthUserId);
 
     try {
@@ -692,7 +730,8 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
             child: Center(
               child: CircularProgressIndicator(
                 value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                    ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
                     : null,
               ),
             ),
@@ -701,11 +740,18 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
         errorBuilder: (context, error, stackTrace) => Container(
           height: 200,
           color: Colors.grey[200],
-          child: const Center(child: Icon(Icons.error_outline, color: Colors.red)),
+          child: const Center(
+            child: Icon(Icons.error_outline, color: Colors.red),
+          ),
         ),
       );
     }
-    return Image.asset(imageUrl, height: 200, width: double.infinity, fit: BoxFit.cover);
+    return Image.asset(
+      imageUrl,
+      height: 200,
+      width: double.infinity,
+      fit: BoxFit.cover,
+    );
   }
 
   ImageProvider _getAuthorAvatar() {
@@ -736,20 +782,35 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
               children: [
                 if (widget.post.tags.isNotEmpty)
                   Text(
-                    widget.post.tags.firstWhere((t) => t.startsWith('#'), orElse: () => ""),
-                    style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold),
+                    widget.post.tags.firstWhere(
+                      (t) => t.startsWith('#'),
+                      orElse: () => "",
+                    ),
+                    style: TextStyle(
+                      color: Colors.blue[800],
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 const SizedBox(height: 4),
                 Text(
                   widget.post.title,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    CircleAvatar(radius: 12, backgroundImage: _getAuthorAvatar()),
+                    CircleAvatar(
+                      radius: 12,
+                      backgroundImage: _getAuthorAvatar(),
+                    ),
                     const SizedBox(width: 8),
-                    Text(widget.post.author.name, style: const TextStyle(color: Colors.grey)),
+                    Text(
+                      widget.post.author.name,
+                      style: const TextStyle(color: Colors.grey),
+                    ),
                     const Spacer(),
                     InkWell(
                       onTap: _toggleLike,
@@ -763,13 +824,19 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
                           const SizedBox(width: 4),
                           Text(
                             numberFormat.format(_likeCount),
-                            style: TextStyle(color: _isLiked ? Colors.red : Colors.grey),
+                            style: TextStyle(
+                              color: _isLiked ? Colors.red : Colors.grey,
+                            ),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 16),
-                    const Icon(Icons.chat_bubble_outline, size: 18, color: Colors.grey),
+                    const Icon(
+                      Icons.chat_bubble_outline,
+                      size: 18,
+                      color: Colors.grey,
+                    ),
                     const SizedBox(width: 4),
                     Text(numberFormat.format(widget.post.commentCount)),
                   ],
@@ -799,7 +866,11 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => _tabBar.preferredSize.height;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return Container(color: Colors.white, child: _tabBar);
   }
 
