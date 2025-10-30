@@ -252,6 +252,12 @@ class _CheckinScreenState extends State<CheckinScreen> {
       }
       _showSnackBar('Tải ảnh hoàn tất!');
 
+      final placeData =
+          _selectedPlaceDoc!.data() as Map<String, dynamic>? ?? {};
+      // Lấy mảng categoryIds từ place (mặc định là mảng rỗng nếu không có)
+      final List<dynamic> categoryIds =
+          placeData['categories'] as List<dynamic>? ?? [];
+
       // 2. Chuẩn bị dữ liệu Firestore
       final reviewsCollection = FirebaseFirestore.instance.collection(
         'reviews',
@@ -269,6 +275,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
         'createdAt': FieldValue.serverTimestamp(),
         'likeCount': 0,
         'commentCount': 0,
+        'categoryIds': categoryIds, // Sao chép mảng ID từ place sang review
       };
 
       // 3. Ghi vào Firestore
