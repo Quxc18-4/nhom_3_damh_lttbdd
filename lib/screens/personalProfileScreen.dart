@@ -9,19 +9,14 @@ import 'package:nhom_3_damh_lttbdd/screens/introductionTabContent.dart';
 import 'package:nhom_3_damh_lttbdd/screens/followingTabContent.dart';
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
 
-
 // ===================================================================
-// LƯU Ý: ĐÃ XÓA KHỐI final List<Post> mockPosts KHỎI ĐÂY
+// PERSONAL PROFILE SCREEN
 // ===================================================================
-
 
 class PersonalProfileScreen extends StatefulWidget {
   final String userId;
 
-  const PersonalProfileScreen({
-    Key? key,
-    required this.userId,
-  }) : super(key: key);
+  const PersonalProfileScreen({Key? key, required this.userId}) : super(key: key);
 
   @override
   State<PersonalProfileScreen> createState() => _PersonalProfileScreenState();
@@ -33,6 +28,14 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
   User _currentUser = User.empty();
   List<Post> _myPosts = [];
   bool _isLoading = true;
+
+  // ✅ Follow/Unfollow state
+  bool _isMyProfile = false;
+  bool _isFollowing = false;
+  bool _isFollowLoading = false;
+  int _followersCount = 0;
+  int _followingCount = 0;
+  String? _currentAuthUserId;
 
   bool get _isAuthenticated => auth.FirebaseAuth.instance.currentUser != null;
 
@@ -60,8 +63,16 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
       _isLoading = true;
     });
 
+    // 1. Lấy ID user đang đăng nhập
+    _currentAuthUserId = auth.FirebaseAuth.instance.currentUser?.uid;
+    if (_currentAuthUserId != null) {
+      _isMyProfile = (widget.userId == _currentAuthUserId);
+    } else {
+      _isMyProfile = false;
+    }
+
     try {
-      // 1. Tải thông tin người dùng
+      // 2. Tải thông tin người dùng
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userId)
@@ -69,11 +80,46 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
 
       if (userDoc.exists) {
         _currentUser = User.fromDoc(userDoc);
+        final data = userDoc.data() as Map<String, dynamic>? ?? {};
+
+        // 3. Lấy follow counts
+        int followers = data['followersCount'] ?? -1;
+        int following = data['followingCount'] ?? -1;
+
+        // 4. Khởi tạo nếu chưa có
+        if (followers == -1 || following == -1) {
+          _initializeFollowCounts(userDoc.reference);
+          followers = 0;
+          following = 0;
+        }
+
+        if (mounted) {
+          setState(() {
+            _followersCount = followers;
+            _followingCount = following;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _currentUser = User(
+              id: widget.userId,
+              name: "Không tìm thấy",
+              avatarUrl: 'assets/images/default_avatar.png',
+            );
+            _isLoading = false;
+          });
+          return;
+        }
       }
 
-      // 2. Tải bài viết
+      // 5. Tải bài viết
       await _fetchMyPosts();
 
+      // 6. Tải trạng thái follow (nếu xem profile người khác)
+      if (!_isMyProfile) {
+        await _fetchFollowStatus();
+      }
     } catch (e) {
       print("Lỗi tải dữ liệu Profile: $e");
     } finally {
@@ -85,11 +131,45 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
     }
   }
 
+  // ✅ Khởi tạo follow counts
+  Future<void> _initializeFollowCounts(DocumentReference userRef) async {
+    try {
+      await userRef.set({
+        'followersCount': 0,
+        'followingCount': 0,
+      }, SetOptions(merge: true));
+      print("Initialized follow counts for ${userRef.id}");
+    } catch (e) {
+      print("Error initializing follow counts: $e");
+    }
+  }
+
+  // ✅ Kiểm tra trạng thái follow
+  Future<void> _fetchFollowStatus() async {
+    if (!_isAuthenticated || _currentAuthUserId == null) return;
+
+    try {
+      final followDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentAuthUserId)
+          .collection('following')
+          .doc(widget.userId)
+          .get();
+
+      if (mounted) {
+        setState(() {
+          _isFollowing = followDoc.exists;
+        });
+      }
+    } catch (e) {
+      print("Lỗi tải follow status: $e");
+    }
+  }
+
   Future<void> _fetchMyPosts() async {
     if (!mounted) return;
 
     try {
-      // Lọc bài viết theo userId
       QuerySnapshot reviewSnapshot = await FirebaseFirestore.instance
           .collection('reviews')
           .where('userId', isEqualTo: widget.userId)
@@ -100,15 +180,15 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
       final postAuthor = _currentUser.id.isNotEmpty ? _currentUser : User.empty();
 
       for (var reviewDoc in reviewSnapshot.docs) {
-        // ✅ Kiểm tra trạng thái like (nếu đã đăng nhập)
+        // ✅ Kiểm tra like status
         bool isLiked = false;
-        if (_isAuthenticated) {
+        if (_currentAuthUserId != null) {
           try {
             final likeDoc = await FirebaseFirestore.instance
                 .collection('reviews')
                 .doc(reviewDoc.id)
                 .collection('likes')
-                .doc(widget.userId)
+                .doc(_currentAuthUserId)
                 .get();
             isLiked = likeDoc.exists;
           } catch (e) {
@@ -126,6 +206,99 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
       }
     } catch (e) {
       print("Lỗi fetch posts: $e");
+    }
+  }
+
+  // ===================================================================
+  // FOLLOW/UNFOLLOW LOGIC
+  // ===================================================================
+
+  Future<void> _toggleFollow() async {
+    if (_currentAuthUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Bạn cần đăng nhập để thực hiện hành động này!"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_isFollowLoading || _isMyProfile) return;
+
+    setState(() {
+      _isFollowLoading = true;
+    });
+
+    final authUserFollowingRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentAuthUserId)
+        .collection('following')
+        .doc(widget.userId);
+
+    final profileUserFollowerRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.userId)
+        .collection('followers')
+        .doc(_currentAuthUserId);
+
+    final authUserDocRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentAuthUserId);
+
+    final profileUserDocRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.userId);
+
+    try {
+      if (_isFollowing) {
+        // UNFOLLOW
+        await authUserFollowingRef.delete();
+        await profileUserFollowerRef.delete();
+        await authUserDocRef.update({'followingCount': FieldValue.increment(-1)});
+        await profileUserDocRef.update({'followersCount': FieldValue.increment(-1)});
+
+        if (mounted) {
+          setState(() {
+            _isFollowing = false;
+            _followersCount--;
+          });
+        }
+      } else {
+        // FOLLOW
+        final timestamp = FieldValue.serverTimestamp();
+        await authUserFollowingRef.set({
+          'followedAt': timestamp,
+          'userId': widget.userId,
+        });
+        await profileUserFollowerRef.set({
+          'followedAt': timestamp,
+          'userId': _currentAuthUserId!,
+        });
+        await authUserDocRef.update({'followingCount': FieldValue.increment(1)});
+        await profileUserDocRef.update({'followersCount': FieldValue.increment(1)});
+
+        if (mounted) {
+          setState(() {
+            _isFollowing = true;
+            _followersCount++;
+          });
+        }
+      }
+    } catch (e) {
+      print("Lỗi toggle follow: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Đã xảy ra lỗi: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFollowLoading = false;
+        });
+      }
     }
   }
 
@@ -205,94 +378,175 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
                   icon: const Icon(Icons.arrow_back_ios_new),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.settings_outlined),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            AccountSettingScreen(userId: widget.userId),
-                      ),
-                    );
-                  },
-                ),
+                // ✅ Chỉ hiển thị Settings nếu là profile của tôi
+                if (_isMyProfile)
+                  IconButton(
+                    icon: const Icon(Icons.settings_outlined),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => AccountSettingScreen(userId: widget.userId),
+                        ),
+                      );
+                    },
+                  )
+                else
+                  const SizedBox(width: 48),
               ],
             ),
           ),
 
           Row(
             children: [
-              CircleAvatar(
-                radius: 40,
-                backgroundImage: _getAvatarProvider(),
-              ),
+              CircleAvatar(radius: 40, backgroundImage: _getAvatarProvider()),
               const SizedBox(width: 16),
               Expanded(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _buildStatColumn("${_myPosts.length}", "Bài viết"),
-                    _buildStatColumn("?", "Người theo dõi"),
-                    _buildStatColumn("?", "Đang theo dõi"),
+                    _buildStatColumn("$_followersCount", "Người theo dõi"),
+                    _buildStatColumn("$_followingCount", "Đang theo dõi"),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              user.name,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+
+          // ✅ Hiển thị tên + nút Follow (nếu là profile người khác)
+          if (!_isMyProfile)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    user.name,
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                _buildFollowButton(),
+              ],
+            )
+          else
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                user.name,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
             ),
-          ),
+
           const SizedBox(height: 16),
 
-          ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              minimumSize: const Size(double.infinity, 40),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text(
-              'Chỉnh sửa Travel Map',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.edit),
-                  label: const Text('Viết bài'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.black,
-                  ),
+          // ✅ Các nút chỉnh sửa (chỉ hiển thị nếu là profile của tôi)
+          if (_isMyProfile) ...[
+            ElevatedButton(
+              onPressed: () {},
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                minimumSize: const Size(double.infinity, 40),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.camera_alt_outlined),
-                  label: const Text('Check-in'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.black,
+              child: const Text(
+                'Chỉnh sửa Travel Map',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CheckinScreen(currentUserId: widget.userId),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.edit),
+                    label: const Text('Viết bài'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.black,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CheckinScreen(currentUserId: widget.userId),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.camera_alt_outlined),
+                    label: const Text('Check-in'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.black,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Widget _buildFollowButton() {
+    if (_isFollowLoading) {
+      return const SizedBox(
+        width: 110,
+        height: 36,
+        child: Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.orange,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_isFollowing) {
+      return OutlinedButton(
+        onPressed: _toggleFollow,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.orange,
+          backgroundColor: Colors.white,
+          side: const BorderSide(color: Colors.orange),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          minimumSize: const Size(110, 36),
+        ),
+        child: const Text('Hủy Follow'),
+      );
+    } else {
+      return ElevatedButton(
+        onPressed: _toggleFollow,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.orange,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          minimumSize: const Size(110, 36),
+        ),
+        child: const Text('Follow'),
+      );
+    }
   }
 
   Widget _buildStatColumn(String value, String label) {
@@ -323,30 +577,29 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
       padding: const EdgeInsets.all(8.0),
       itemCount: _myPosts.length,
       itemBuilder: (context, index) {
-        // ✅ GỌI CLASS TimelinePostCard đã được định nghĩa dưới đây
         return TimelinePostCard(
           post: _myPosts[index],
-          userId: widget.userId,
+          currentAuthUserId: _currentAuthUserId,
           onPostUpdated: () => _fetchMyPosts(),
         );
       },
     );
   }
-} // End of _PersonalProfileScreenState
+}
 
 // ===================================================================
-// 3. TIMELINE POST CARD (Stateful để xử lý like) - ĐÃ TÁCH RA
+// TIMELINE POST CARD
 // ===================================================================
 
 class TimelinePostCard extends StatefulWidget {
   final Post post;
-  final String userId;
-  final VoidCallback onPostUpdated; // ✅ Giữ nguyên
+  final String? currentAuthUserId;
+  final VoidCallback onPostUpdated;
 
   const TimelinePostCard({
     Key? key,
     required this.post,
-    required this.userId,
+    required this.currentAuthUserId,
     required this.onPostUpdated,
   }) : super(key: key);
 
@@ -355,8 +608,6 @@ class TimelinePostCard extends StatefulWidget {
 }
 
 class _TimelinePostCardState extends State<TimelinePostCard> {
-  // Lỗi "The method 'onPostUpdated' isn't defined for the type 'PersonalProfileScreen'"
-  // đã được sửa vì nó nằm trong widget, không phải class cha.
   late bool _isLiked;
   late int _likeCount;
   bool _isProcessing = false;
@@ -368,9 +619,8 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
     _likeCount = widget.post.likeCount;
   }
 
-  // ✅ Toggle Like/Unlike
   Future<void> _toggleLike() async {
-    if (auth.FirebaseAuth.instance.currentUser == null) {
+    if (widget.currentAuthUserId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Bạn cần đăng nhập để thích bài viết!"),
@@ -384,35 +634,45 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
 
     setState(() {
       _isProcessing = true;
+      _isLiked = !_isLiked;
+      _likeCount += _isLiked ? 1 : -1;
     });
 
     final reviewRef = FirebaseFirestore.instance.collection('reviews').doc(widget.post.id);
-    final likeRef = reviewRef.collection('likes').doc(widget.userId);
+    final likeRef = reviewRef.collection('likes').doc(widget.currentAuthUserId);
 
     try {
-      if (_isLiked) {
+      if (!_isLiked) {
         await likeRef.delete();
         await reviewRef.update({'likeCount': FieldValue.increment(-1)});
       } else {
-        await likeRef.set({'createdAt': FieldValue.serverTimestamp()});
+        await likeRef.set({
+          'userId': widget.currentAuthUserId,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
         await reviewRef.update({'likeCount': FieldValue.increment(1)});
       }
 
-      // Gọi hàm cập nhật dữ liệu của Profile Screen
-      widget.onPostUpdated();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Lỗi: $e"), backgroundColor: Colors.red),
-      );
-    } finally {
       if (mounted) {
         setState(() {
           _isProcessing = false;
         });
       }
+    } catch (e) {
+      print("Lỗi toggle like: $e");
+      // Rollback
+      if (mounted) {
+        setState(() {
+          _isLiked = !_isLiked;
+          _likeCount += _isLiked ? 1 : -1;
+          _isProcessing = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Lỗi: $e"), backgroundColor: Colors.red),
+        );
+      }
     }
   }
-
 
   Widget _getPostImage() {
     if (widget.post.imageUrls.isEmpty) return const SizedBox.shrink();
@@ -432,8 +692,7 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
             child: Center(
               child: CircularProgressIndicator(
                 value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                    loadingProgress.expectedTotalBytes!
+                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
                     : null,
               ),
             ),
@@ -446,12 +705,7 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
         ),
       );
     }
-    return Image.asset(
-      imageUrl,
-      height: 200,
-      width: double.infinity,
-      fit: BoxFit.cover,
-    );
+    return Image.asset(imageUrl, height: 200, width: double.infinity, fit: BoxFit.cover);
   }
 
   ImageProvider _getAuthorAvatar() {
@@ -482,37 +736,21 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
               children: [
                 if (widget.post.tags.isNotEmpty)
                   Text(
-                    widget.post.tags.firstWhere(
-                          (t) => t.startsWith('#'),
-                      orElse: () => "",
-                    ),
-                    style: TextStyle(
-                      color: Colors.blue[800],
-                      fontWeight: FontWeight.bold,
-                    ),
+                    widget.post.tags.firstWhere((t) => t.startsWith('#'), orElse: () => ""),
+                    style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold),
                   ),
                 const SizedBox(height: 4),
                 Text(
                   widget.post.title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    CircleAvatar(
-                      radius: 12,
-                      backgroundImage: _getAuthorAvatar(),
-                    ),
+                    CircleAvatar(radius: 12, backgroundImage: _getAuthorAvatar()),
                     const SizedBox(width: 8),
-                    Text(
-                      widget.post.author.name,
-                      style: const TextStyle(color: Colors.grey),
-                    ),
+                    Text(widget.post.author.name, style: const TextStyle(color: Colors.grey)),
                     const Spacer(),
-                    // ✅ Nút Like với trạng thái động
                     InkWell(
                       onTap: _toggleLike,
                       child: Row(
@@ -525,19 +763,13 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
                           const SizedBox(width: 4),
                           Text(
                             numberFormat.format(_likeCount),
-                            style: TextStyle(
-                              color: _isLiked ? Colors.red : Colors.grey,
-                            ),
+                            style: TextStyle(color: _isLiked ? Colors.red : Colors.grey),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 16),
-                    const Icon(
-                      Icons.chat_bubble_outline,
-                      size: 18,
-                      color: Colors.grey,
-                    ),
+                    const Icon(Icons.chat_bubble_outline, size: 18, color: Colors.grey),
                     const SizedBox(width: 4),
                     Text(numberFormat.format(widget.post.commentCount)),
                   ],
@@ -549,10 +781,12 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
       ),
     );
   }
-} // End of TimelinePostCard
+}
 
+// ===================================================================
+// SLIVER APP BAR DELEGATE
+// ===================================================================
 
-// Lớp Helper để giữ TabBar "dính" lại khi cuộn
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar _tabBar;
 
@@ -565,11 +799,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => _tabBar.preferredSize.height;
 
   @override
-  Widget build(
-      BuildContext context,
-      double shrinkOffset,
-      bool overlapsContent,
-      ) {
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(color: Colors.white, child: _tabBar);
   }
 
