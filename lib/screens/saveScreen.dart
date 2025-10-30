@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nhom_3_damh_lttbdd/screens/allColllectionsScreen.dart';
-import 'addSaveItemScreen.dart'; // Đảm bảo bạn có file này
-
+import 'package:nhom_3_damh_lttbdd/screens/addSaveItemScreen.dart'; // Đảm bảo bạn có file này
+import 'package:nhom_3_damh_lttbdd/screens/postDetailScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/albumDetailScreen.dart';
 // =========================================================================
 // 1. MODELS DỮ LIỆU TỪ FIREBASE
 // =========================================================================
@@ -242,9 +243,15 @@ class _SavedScreenState extends State<SavedScreen> {
   }
 
   void _navigateToCollectionDetail(String albumId, String albumTitle) {
-    // TODO: Chuyển sang trang chi tiết album
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Chuyển đến danh sách Review của $albumTitle')),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AlbumDetailScreen(
+          userId: widget.userId,
+          albumId: albumId,
+          albumTitle: albumTitle,
+        ),
+      ),
     );
   }
 
@@ -498,8 +505,12 @@ class _SavedScreenState extends State<SavedScreen> {
                   final item = items[index];
                   return InkWell(
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Xem chi tiết: ${item.name}')));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PostDetailScreen(reviewId: item.reviewId),
+                        ),
+                      );
                     },
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
