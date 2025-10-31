@@ -15,10 +15,7 @@ import 'package:nhom_3_damh_lttbdd/screens/personal_profile/personalProfileScree
 class PostDetailScreen extends StatefulWidget {
   final String reviewId;
 
-  const PostDetailScreen({
-    Key? key,
-    required this.reviewId,
-  }) : super(key: key);
+  const PostDetailScreen({Key? key, required this.reviewId}) : super(key: key);
 
   @override
   State<PostDetailScreen> createState() => _PostDetailScreenState();
@@ -34,7 +31,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   bool _isLoadingPost = true;
   CommentModel? _replyingToComment;
 
-  String get _currentUserId => auth.FirebaseAuth.instance.currentUser?.uid ?? '';
+  String get _currentUserId =>
+      auth.FirebaseAuth.instance.currentUser?.uid ?? '';
   bool get _isAuthenticated => _currentUserId.isNotEmpty;
 
   @override
@@ -103,9 +101,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         setState(() {
           _isLoadingPost = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi tải bài viết: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi tải bài viết: $e')));
       }
     }
   }
@@ -454,12 +452,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               children: post.tags
                   .map(
                     (tag) => Chip(
-                  label: Text(tag, style: const TextStyle(fontSize: 12)),
-                  backgroundColor: Colors.grey[200],
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              )
+                      label: Text(tag, style: const TextStyle(fontSize: 12)),
+                      backgroundColor: Colors.grey[200],
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  )
                   .toList(),
             ),
             const SizedBox(height: 16),
@@ -472,7 +470,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildPostActionButton(
-                icon: post.isLikedByUser ? Icons.favorite : Icons.favorite_border,
+                icon: post.isLikedByUser
+                    ? Icons.favorite
+                    : Icons.favorite_border,
                 label: numberFormat.format(post.likeCount),
                 onPressed: _togglePostLike,
                 color: post.isLikedByUser ? Colors.red : Colors.grey[700],
@@ -549,10 +549,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           children: [
             Icon(icon, color: color ?? Colors.grey[700], size: 20),
             const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(color: color ?? Colors.grey[700]),
-            ),
+            Text(label, style: TextStyle(color: color ?? Colors.grey[700])),
           ],
         ),
       ),
@@ -641,7 +638,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   Future<List<CommentModel>> _mapCommentsWithUsers(
-      List<QueryDocumentSnapshot> docs) async {
+    List<QueryDocumentSnapshot> docs,
+  ) async {
     try {
       final futures = docs.map((doc) async {
         final data = doc.data() as Map<String, dynamic>;
@@ -715,10 +713,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  comment.content,
-                  style: const TextStyle(fontSize: 15),
-                ),
+                Text(comment.content, style: const TextStyle(fontSize: 15)),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -790,7 +785,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           children: [
             if (_replyingToComment != null)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 margin: const EdgeInsets.only(bottom: 8),
                 decoration: BoxDecoration(
                   color: Colors.blue.shade50,
@@ -846,14 +844,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 const SizedBox(width: 8),
                 _isSending
                     ? const SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+                        width: 32,
+                        height: 32,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : IconButton(
-                  icon: const Icon(Icons.send, color: Colors.blue),
-                  onPressed: _sendComment,
-                ),
+                        icon: const Icon(Icons.send, color: Colors.blue),
+                        onPressed: _sendComment,
+                      ),
               ],
             ),
           ],
