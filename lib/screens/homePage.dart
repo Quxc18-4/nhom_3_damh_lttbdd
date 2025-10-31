@@ -7,14 +7,14 @@ import 'package:nhom_3_damh_lttbdd/screens/saveScreen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'dart:async'; // Cần cho StreamSubscription
+import 'dart:async'; 
 
 // Import Model và Screens mới/cần thiết
 import 'package:nhom_3_damh_lttbdd/model/activity.dart';
 import 'package:nhom_3_damh_lttbdd/services/local_plan_service.dart';
 import 'package:nhom_3_damh_lttbdd/model/banner.dart';
 import 'bannerDetailScreen.dart';
-import 'notificationScreen.dart'; // [MỚI] Import Notification Screen
+import 'notificationScreen.dart'; 
 
 // Giả định các đường dẫn assets (GIỮ NGUYÊN)
 const String _ASSET_AVATAR = 'assets/images/image 8.png';
@@ -83,12 +83,12 @@ class _HomePageState extends State<HomePage> {
     _loadDayActivitiesPreview();
     _loadUserData();
     _loadActiveBanners();
-    _setupNotificationListener(); // [MỚI] Khởi tạo listener thông báo
+    _setupNotificationListener(); 
   }
 
   @override
   void dispose() {
-    _notificationSubscription?.cancel(); // Hủy listener khi widget bị hủy
+    _notificationSubscription?.cancel();
     super.dispose();
   }
 
@@ -97,7 +97,6 @@ class _HomePageState extends State<HomePage> {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
 
-    // Lắng nghe các thông báo có 'userId' là ID của người dùng hiện tại và 'isRead' là false
     _notificationSubscription = _firestore
         .collection('notifications')
         .where('userId', isEqualTo: currentUser.uid)
@@ -125,7 +124,6 @@ class _HomePageState extends State<HomePage> {
         builder: (context) => NotificationScreen(userId: widget.userId),
       ),
     ).then((_) {
-      // Sau khi quay về, có thể kiểm tra lại số lượng chưa đọc nếu cần (dù listener đã làm việc này)
       _setupNotificationListener();
     });
   }
@@ -260,6 +258,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // ✅ WIDGET NÀY ĐÃ ĐƯỢC MERGE
   Widget _buildTravelPlanPreview() {
     final day1 = _startDate;
     final day2 = _startDate.add(const Duration(days: 1));
@@ -307,17 +306,20 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(height: 6),
 
+        // Tabs
         DefaultTabController(
           length: 3,
           initialIndex: 0,
           child: Column(
             children: [
+              // --- Thanh tab trên ---
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
                 child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
                     color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(40),
+                    borderRadius: BorderRadius.circular(30), // Bo tròn nhẹ hơn
                   ),
                   child: TabBar(
                     isScrollable: true,
@@ -374,6 +376,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
+              // --- Lịch / hoạt động bên dưới ---
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16.0),
                 decoration: const BoxDecoration(
@@ -461,7 +464,7 @@ class _HomePageState extends State<HomePage> {
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
 
-              // [MỚI] NÚT THÔNG BÁO VỚI HUY HIỆU
+              // NÚT THÔNG BÁO VỚI HUY HIỆU
               Stack(
                 children: [
                   IconButton(
@@ -469,7 +472,7 @@ class _HomePageState extends State<HomePage> {
                       Icons.notifications_none,
                       color: Colors.black,
                     ),
-                    onPressed: _navigateToNotifications, // [MỚI] Điều hướng
+                    onPressed: _navigateToNotifications, // Điều hướng
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
                       minWidth: 32,
@@ -699,7 +702,6 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
-
         if (_activeBanners.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10),
@@ -810,25 +812,25 @@ class _HomePageState extends State<HomePage> {
   // --- NAVIGATION LOGIC (Giữ nguyên) ---
 
   Widget _buildBookingContent() => const Center(
-    child: Text(
-      'Đặt chỗ của tôi',
-      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-    ),
-  );
-
-  Widget _buildSavedContent() => const Center(
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(Icons.bookmark_outline, size: 80, color: Colors.grey),
-        SizedBox(height: 16),
-        Text(
-          'Đã lưu',
+        child: Text(
+          'Đặt chỗ của tôi',
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
         ),
-      ],
-    ),
-  );
+      );
+
+  Widget _buildSavedContent() => const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.bookmark_outline, size: 80, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'Đã lưu',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      );
 
   Widget _getSelectedContent() {
     switch (_selectedIndex) {
