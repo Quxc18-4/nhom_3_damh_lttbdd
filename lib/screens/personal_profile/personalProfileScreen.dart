@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
+// Lưu ý: Đảm bảo các đường dẫn import này là chính xác trong dự án của bạn
 import 'package:nhom_3_damh_lttbdd/screens/albumTabContent.dart';
 import 'package:nhom_3_damh_lttbdd/screens/introductionTabContent.dart';
 import 'package:nhom_3_damh_lttbdd/screens/followingTabContent.dart';
@@ -14,7 +15,8 @@ import 'widget/timeline_post_card.dart';
 class PersonalProfileScreen extends StatefulWidget {
   final String userId;
 
-  const PersonalProfileScreen({Key? key, required this.userId}) : super(key: key);
+  const PersonalProfileScreen({Key? key, required this.userId})
+    : super(key: key);
 
   @override
   State<PersonalProfileScreen> createState() => _PersonalProfileScreenState();
@@ -24,6 +26,9 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   User _currentUser = User.empty();
+  // ✅ SỬA LỖI 1: Thêm biến để lưu dữ liệu thô (raw user data) cho IntroductionTabContent
+  Map<String, dynamic>? _rawUserData;
+
   List<Post> _myPosts = [];
   bool _isLoading = true;
 
@@ -70,6 +75,10 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
       if (userDoc.exists) {
         _currentUser = User.fromDoc(userDoc);
         final data = userDoc.data() as Map<String, dynamic>? ?? {};
+
+        // ✅ SỬA LỖI 2: Lưu dữ liệu thô (Map) vào biến state mới
+        _rawUserData = data;
+
         int followers = data['followersCount'] ?? 0;
         int following = data['followingCount'] ?? 0;
 
@@ -100,7 +109,9 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
           .get();
 
       List<Post> posts = [];
-      final postAuthor = _currentUser.id.isNotEmpty ? _currentUser : User.empty();
+      final postAuthor = _currentUser.id.isNotEmpty
+          ? _currentUser
+          : User.empty();
 
       for (var doc in snapshot.docs) {
         bool isLiked = false;
@@ -143,7 +154,9 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
   Future<void> _toggleFollow() async {
     if (_currentAuthUserId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Bạn cần đăng nhập để thực hiện hành động này!")),
+        const SnackBar(
+          content: Text("Bạn cần đăng nhập để thực hiện hành động này!"),
+        ),
       );
       return;
     }
@@ -163,8 +176,12 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
         .collection('followers')
         .doc(_currentAuthUserId);
 
-    final myDoc = FirebaseFirestore.instance.collection('users').doc(_currentAuthUserId);
-    final theirDoc = FirebaseFirestore.instance.collection('users').doc(widget.userId);
+    final myDoc = FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentAuthUserId);
+    final theirDoc = FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.userId);
 
     try {
       if (_isFollowing) {
@@ -219,6 +236,7 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
               followingCount: _followingCount,
               postCount: _myPosts.length,
               onFollowToggle: _toggleFollow,
+              // Giữ lại tham số nếu có trong ProfileHeader của bạn
               currentUserId: widget.userId,
             ),
           ),
@@ -231,9 +249,23 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
           controller: _tabController,
           children: [
             _buildTimeline(),
-            const IntroductionTabContent(),
+
+            // ✅ SỬA LỖI 3: Truyền biến _rawUserData đã sửa lỗi 'undefined_method'
+            IntroductionTabContent(
+              userData: _rawUserData,
+              userPosts: _myPosts,
+              isMyProfile: _isMyProfile,
+              userId: widget.userId,
+            ),
+
             AlbumTabContent(userId: widget.userId),
-            const FollowingTabContent(),
+
+            // ✅ SỬA LỖI 4: Truyền các tham số bắt buộc cho FollowingTabContent
+            FollowingTabContent(
+              userId: widget.userId,
+              currentAuthUserId: _currentAuthUserId,
+              isMyProfile: _isMyProfile,
+            ),
           ],
         ),
       ),
@@ -246,8 +278,10 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
   Widget _buildTimeline() {
     if (_myPosts.isEmpty) {
       return const Center(
-        child: Text('Chưa có bài viết nào.',
-            style: TextStyle(color: Colors.grey, fontSize: 16)),
+        child: Text(
+          'Chưa có bài viết nào.',
+          style: TextStyle(color: Colors.grey, fontSize: 16),
+        ),
       );
     }
 

@@ -13,16 +13,16 @@ class User {
   User({required this.id, required this.name, required this.avatarUrl});
 
   factory User.empty() => User(
-      id: '',
-      name: 'Đang tải...',
-      avatarUrl: 'assets/images/default_avatar.png'
+    id: '',
+    name: 'Đang tải...',
+    avatarUrl: 'assets/images/default_avatar.png',
   );
 
   factory User.fromDoc(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     return User(
       id: doc.id,
-      name: data['fullName'] ?? data['name'] ?? 'Người dùng',
+      name: data['name'] ?? data['fullName'] ?? 'Người dùng',
       avatarUrl: data['avatarUrl'] ?? 'assets/images/default_avatar.png',
     );
   }
@@ -55,11 +55,17 @@ class Post {
     this.isLikedByUser = false,
   });
 
-  factory Post.fromDoc(DocumentSnapshot doc, User postAuthor, {bool isLiked = false}) {
+  factory Post.fromDoc(
+    DocumentSnapshot doc,
+    User postAuthor, {
+    bool isLiked = false,
+  }) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     final Timestamp timestamp = data['createdAt'] ?? Timestamp.now();
     final DateTime postTime = timestamp.toDate();
-    final String formattedTime = DateFormat('dd/MM/yyyy, HH:mm').format(postTime);
+    final String formattedTime = DateFormat(
+      'dd/MM/yyyy, HH:mm',
+    ).format(postTime);
 
     return Post(
       id: doc.id,

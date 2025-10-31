@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart'; // Import User model
-import 'package:nhom_3_damh_lttbdd/screens/personalProfileScreen.dart'; // Import PersonalProfileScreen
+import 'package:nhom_3_damh_lttbdd/screens/personal_profile/personalProfileScreen.dart'; // Import PersonalProfileScreen
 
 // Model để lưu trữ thông tin user đang follow
 class FollowingUser {

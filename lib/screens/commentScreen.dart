@@ -3,17 +3,32 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:intl/intl.dart';
 
-import 'package:nhom_3_damh_lttbdd/model/comment_model.dart';
-import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
+import 'package:nhom_3_damh_lttbdd/model/comment_model.dart'; // Đảm bảo đã import CommentModel
+import 'package:nhom_3_damh_lttbdd/model/post_model.dart'; // Đảm bảo đã import Post và User Model
+
+// =======================================================================
+// ĐỊNH NGHĨA CALLBACK CHO VIỆC TẠO THÔNG BÁO
+// =======================================================================
+typedef OnNotificationCreated =
+    void Function(
+      String recipientId,
+      String senderId,
+      String reviewId,
+      String message,
+    ); // Bao gồm nội dung comment
 
 class CommentScreen extends StatefulWidget {
   final String reviewId;
   final Post post;
 
+  // THÊM: Callback để gửi tín hiệu tạo thông báo ra bên ngoài (PostCard)
+  final OnNotificationCreated onCommentSent;
+
   const CommentScreen({
     Key? key,
     required this.reviewId,
     required this.post,
+    required this.onCommentSent, // Yêu cầu hàm callback
   }) : super(key: key);
 
   @override
@@ -23,10 +38,9 @@ class CommentScreen extends StatefulWidget {
 class _CommentScreenState extends State<CommentScreen> {
   final TextEditingController _commentController = TextEditingController();
   final FocusNode _commentFocus = FocusNode();
-  final Map<String, User> _userCache = {}; // Cache thông tin User
+  final Map<String, User> _userCache = {};
   bool _isSending = false;
 
-  // ✅ Trạng thái cho việc Phản hồi
   CommentModel? _replyingToComment;
 
   @override
@@ -36,14 +50,13 @@ class _CommentScreenState extends State<CommentScreen> {
     super.dispose();
   }
 
-  // Lấy User ID của người dùng hiện tại
-  String get _currentUserId => auth.FirebaseAuth.instance.currentUser?.uid ?? '';
+  String get _currentUserId =>
+      auth.FirebaseAuth.instance.currentUser?.uid ?? '';
   bool get _isAuthenticated => _currentUserId.isNotEmpty;
 
   // =======================================================================
   // HÀM FETCH VÀ CACHE USER DATA
   // =======================================================================
-  /// Fetches user data from Firestore or returns from cache.
   Future<User> _fetchAndCacheUser(String userId) async {
     if (_userCache.containsKey(userId)) {
       return _userCache[userId]!;
@@ -57,19 +70,12 @@ class _CommentScreenState extends State<CommentScreen> {
 
       if (userDoc.exists && userDoc.data() != null) {
         final data = userDoc.data()!;
-        // ✅ Ưu tiên name → fullName → fallback post.author.name
         final String userName =
-            data['name'] ??
-                data['fullName'] ??
-                widget.post.author.name; // fallback khi không có name/fullName
+            data['name'] ?? data['fullName'] ?? widget.post.author.name;
         final String avatarUrl =
             data['avatarUrl'] ?? 'assets/images/default_avatar.png';
 
-        final user = User(
-          id: userId,
-          name: userName,
-          avatarUrl: avatarUrl,
-        );
+        final user = User(id: userId, name: userName, avatarUrl: avatarUrl);
 
         _userCache[userId] = user;
         return user;
@@ -78,7 +84,6 @@ class _CommentScreenState extends State<CommentScreen> {
       print('⚠️ Lỗi khi lấy user $userId: $e');
     }
 
-    // Trường hợp lỗi hoặc không tồn tại user
     return User(
       id: userId,
       name: widget.post.author.name,
@@ -86,10 +91,8 @@ class _CommentScreenState extends State<CommentScreen> {
     );
   }
 
-
-
   // =======================================================================
-  // HÀM GỬI COMMENT MỚI (HOẶC REPLY)
+  // HÀM GỬI COMMENT MỚI (HOẶC REPLY) - ĐÃ GỌI CALLBACK NOTIFICATION
   // =======================================================================
   Future<void> _sendComment() async {
     final commentText = _commentController.text.trim();
@@ -102,39 +105,62 @@ class _CommentScreenState extends State<CommentScreen> {
     _commentFocus.unfocus();
 
     try {
-      final reviewRef = FirebaseFirestore.instance.collection('reviews').doc(widget.reviewId);
+      final reviewRef = FirebaseFirestore.instance
+          .collection('reviews')
+          .doc(widget.reviewId);
       final commentsRef = reviewRef.collection('comments');
 
-      // Chuẩn bị dữ liệu
+      // 1. Chuẩn bị dữ liệu
       final Map<String, dynamic> commentData = {
         'userId': _currentUserId,
         'content': commentText,
         'commentedAt': FieldValue.serverTimestamp(),
       };
 
-      // ✅ Thêm parentCommentId nếu đang phản hồi
       if (_replyingToComment != null) {
         commentData['parentCommentId'] = _replyingToComment!.id;
       }
 
-      // Tạo document comment mới
+      // 2. Tạo document comment mới
       await commentsRef.add(commentData);
 
-      // Cập nhật commentCount trên document review chính
+      // 3. Cập nhật commentCount trên document review chính
       await reviewRef.update({'commentCount': FieldValue.increment(1)});
 
-      // Xóa nội dung nhập và reset trạng thái
-      _commentController.clear();
-      setState(() {
-        _replyingToComment = null; // ✅ Reset trạng thái reply
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bình luận đã được gửi!'), duration: Duration(seconds: 1)),
+      // 4. GỌI CALLBACK TẠO THÔNG BÁO VỚI NỘI DUNG COMMENT
+      String recipientId;
+      if (_replyingToComment != null) {
+        // Nếu là reply, người nhận là chủ comment được reply
+        recipientId = _replyingToComment!.userId;
+      } else {
+        // Nếu là comment gốc, người nhận là chủ bài viết
+        recipientId = widget.post.authorId;
+      }
+
+      widget.onCommentSent(
+        recipientId,
+        _currentUserId,
+        widget.reviewId,
+        commentText, // TRUYỀN NỘI DUNG COMMENT
       );
 
+      // 5. Xóa nội dung nhập và reset trạng thái
+      _commentController.clear();
+      setState(() {
+        _replyingToComment = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bình luận đã được gửi!'),
+          duration: Duration(seconds: 1),
+        ),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi gửi bình luận: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Lỗi gửi bình luận: $e'),
+          backgroundColor: Colors.red,
+        ),
       );
       print('Error sending comment: $e');
     } finally {
@@ -147,8 +173,9 @@ class _CommentScreenState extends State<CommentScreen> {
   }
 
   // =======================================================================
-  // HÀM XỬ LÝ LIKE TRÊN COMMENT
+  // CÁC HÀM XỬ LÝ LIKE, REPLY
   // =======================================================================
+
   Future<void> _toggleCommentLike(CommentModel comment) async {
     if (!_isAuthenticated) return;
 
@@ -158,46 +185,42 @@ class _CommentScreenState extends State<CommentScreen> {
         .collection('comments')
         .doc(comment.id);
 
-    // ID của document Like là ID của người dùng (theo Rules)
     final likeRef = commentRef.collection('likes').doc(_currentUserId);
 
     try {
       if (comment.isLikedByUser) {
-        // Unlike: Xóa document Like và giảm số lượng
         await likeRef.delete();
         await commentRef.update({'likeCount': FieldValue.increment(-1)});
       } else {
-        // Like: Tạo document Like và tăng số lượng
         await likeRef.set({'createdAt': FieldValue.serverTimestamp()});
         await commentRef.update({'likeCount': FieldValue.increment(1)});
       }
-
-      // ✅ CẬP NHẬT TRẠNG THÁI CỤC BỘ (Không cần setState vì StreamBuilder sẽ refresh)
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi thích bình luận: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Lỗi thích bình luận: $e'),
+          backgroundColor: Colors.red,
+        ),
       );
       print('Error toggle comment like: $e');
     }
   }
 
-
-  // =======================================================================
-  // HÀM XỬ LÝ REPLY
-  // =======================================================================
   void _startReplyToUser(CommentModel comment) {
     if (!_isAuthenticated) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Bạn cần đăng nhập để phản hồi!"), backgroundColor: Colors.orange),
+        const SnackBar(
+          content: Text("Bạn cần đăng nhập để phản hồi!"),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
 
-    // ✅ Thiết lập trạng thái Reply
     setState(() {
       _replyingToComment = comment;
-      _commentController.text = '@${comment.author.name} '; // Thêm tag tên
-      _commentFocus.requestFocus(); // Focus vào input
+      _commentController.text = '@${comment.author.name} ';
+      _commentFocus.requestFocus();
       _commentController.selection = TextSelection.fromPosition(
         TextPosition(offset: _commentController.text.length),
       );
@@ -212,83 +235,9 @@ class _CommentScreenState extends State<CommentScreen> {
     });
   }
 
-
-  // =======================================================================
-  // WIDGET BUILDER
-  // =======================================================================
-
-  @override
-  Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final viewInsets = mediaQuery.viewInsets.bottom;
-    final double maxSheetHeight = mediaQuery.size.height * 0.9;
-
-    return Container(
-      height: maxSheetHeight,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        children: [
-          _buildHeader(),
-
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('reviews')
-                  .doc(widget.reviewId)
-                  .collection('comments')
-                  .orderBy('commentedAt', descending: false) // Sửa thành ascending để hiển thị comment cũ nhất ở trên
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(child: Text('Lỗi tải bình luận: ${snapshot.error}'));
-                }
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final commentDocs = snapshot.data?.docs ?? [];
-                if (commentDocs.isEmpty) {
-                  return const Center(child: Text('Chưa có bình luận nào. Hãy là người đầu tiên!'));
-                }
-
-                return FutureBuilder<List<CommentModel>>(
-                  future: _mapCommentsWithUsers(commentDocs),
-                  builder: (context, userSnapshot) {
-                    if (userSnapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (userSnapshot.hasError || !userSnapshot.hasData) {
-                      return const Center(child: Text('Lỗi hiển thị dữ liệu người dùng.'));
-                    }
-
-                    final comments = userSnapshot.data!;
-
-                    return ListView.builder(
-                      // reverse: true, // Bỏ reverse để comment cũ nhất ở trên
-                      padding: const EdgeInsets.only(top: 8, bottom: 8),
-                      itemCount: comments.length,
-                      itemBuilder: (context, index) {
-                        return _buildCommentItem(comments[index]);
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-
-          // ✅ COMMENT INPUT SECTION
-          _buildCommentInput(viewInsets),
-        ],
-      ),
-    );
-  }
-
-  // Hàm Map comment documents thành CommentModel và fetch User
-  Future<List<CommentModel>> _mapCommentsWithUsers(List<QueryDocumentSnapshot> docs) async {
+  Future<List<CommentModel>> _mapCommentsWithUsers(
+    List<QueryDocumentSnapshot> docs,
+  ) async {
     try {
       final futures = docs.map((doc) async {
         final data = doc.data() as Map<String, dynamic>;
@@ -323,6 +272,9 @@ class _CommentScreenState extends State<CommentScreen> {
     }
   }
 
+  // =======================================================================
+  // WIDGET BUILDER METHODS
+  // =======================================================================
 
   Widget _buildHeader() {
     return Container(
@@ -365,31 +317,31 @@ class _CommentScreenState extends State<CommentScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Tên và Thời gian
                 Row(
                   children: [
                     Text(
                       comment.author.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       timeFormat.format(comment.commentedAt),
-                      style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
 
-                // Nội dung bình luận
-                Text(
-                  comment.content,
-                  style: const TextStyle(fontSize: 15),
-                ),
+                Text(comment.content, style: const TextStyle(fontSize: 15)),
 
                 const SizedBox(height: 8),
 
-                // Nút Thích và Phản hồi
                 Row(
                   children: [
                     // Nút Thích
@@ -400,9 +352,11 @@ class _CommentScreenState extends State<CommentScreen> {
                           Text(
                             'Thích',
                             style: TextStyle(
-                                color: comment.isLikedByUser ? Colors.red.shade700 : Colors.blue.shade700,
-                                fontWeight: FontWeight.w500,
-                                fontSize: 12
+                              color: comment.isLikedByUser
+                                  ? Colors.red.shade700
+                                  : Colors.blue.shade700,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 12,
                             ),
                           ),
                           if (comment.likeCount > 0)
@@ -425,7 +379,11 @@ class _CommentScreenState extends State<CommentScreen> {
                       onTap: () => _startReplyToUser(comment),
                       child: Text(
                         'Phản hồi',
-                        style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.w500, fontSize: 12),
+                        style: TextStyle(
+                          color: Colors.blue.shade700,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   ],
@@ -469,13 +427,20 @@ class _CommentScreenState extends State<CommentScreen> {
                   Expanded(
                     child: Text(
                       'Trả lời ${_replyingToComment!.author.name}',
-                      style: TextStyle(color: Colors.blue.shade800, fontSize: 13),
+                      style: TextStyle(
+                        color: Colors.blue.shade800,
+                        fontSize: 13,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   InkWell(
                     onTap: _cancelReply,
-                    child: Icon(Icons.close, size: 16, color: Colors.blue.shade800),
+                    child: Icon(
+                      Icons.close,
+                      size: 16,
+                      color: Colors.blue.shade800,
+                    ),
                   ),
                 ],
               ),
@@ -491,8 +456,13 @@ class _CommentScreenState extends State<CommentScreen> {
                   minLines: 1,
                   maxLines: 4,
                   decoration: InputDecoration(
-                    hintText: _replyingToComment != null ? 'Viết phản hồi...' : 'Viết bình luận...',
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    hintText: _replyingToComment != null
+                        ? 'Viết phản hồi...'
+                        : 'Viết bình luận...',
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
                       borderSide: BorderSide(color: Colors.grey.shade300),
@@ -504,16 +474,96 @@ class _CommentScreenState extends State<CommentScreen> {
               const SizedBox(width: 8),
               _isSending
                   ? const SizedBox(
-                width: 32,
-                height: 32,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+                      width: 32,
+                      height: 32,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : IconButton(
-                icon: const Icon(Icons.send, color: Colors.blue),
-                onPressed: _sendComment,
-              ),
+                      icon: const Icon(Icons.send, color: Colors.blue),
+                      onPressed: _sendComment,
+                    ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  // =======================================================================
+  // THÊM: PHƯƠNG THỨC BUILD BẮT BUỘC ĐỂ KHẮC PHỤC LỖI
+  // =======================================================================
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final viewInsets = mediaQuery.viewInsets.bottom;
+    final double maxSheetHeight = mediaQuery.size.height * 0.9;
+
+    return Container(
+      height: maxSheetHeight,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          _buildHeader(),
+
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('reviews')
+                  .doc(widget.reviewId)
+                  .collection('comments')
+                  .orderBy('commentedAt', descending: false)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text('Lỗi tải bình luận: ${snapshot.error}'),
+                  );
+                }
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final commentDocs = snapshot.data?.docs ?? [];
+                if (commentDocs.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'Chưa có bình luận nào. Hãy là người đầu tiên!',
+                    ),
+                  );
+                }
+
+                return FutureBuilder<List<CommentModel>>(
+                  future: _mapCommentsWithUsers(commentDocs),
+                  builder: (context, userSnapshot) {
+                    if (userSnapshot.connectionState ==
+                        ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (userSnapshot.hasError || !userSnapshot.hasData) {
+                      return const Center(
+                        child: Text('Lỗi hiển thị dữ liệu người dùng.'),
+                      );
+                    }
+
+                    final comments = userSnapshot.data!;
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.only(top: 8, bottom: 8),
+                      itemCount: comments.length,
+                      itemBuilder: (context, index) {
+                        return _buildCommentItem(comments[index]);
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+
+          _buildCommentInput(viewInsets),
         ],
       ),
     );

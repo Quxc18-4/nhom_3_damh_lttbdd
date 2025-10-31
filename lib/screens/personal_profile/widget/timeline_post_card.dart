@@ -1,5 +1,3 @@
-// timeline_post_card.dart
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -36,10 +34,40 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
   }
 
   // ============================================================
-  // 🔹 XỬ LÝ LIKE POST (Optimistic UI)
+  // 🆕 HÀM TẠO THÔNG BÁO
+  // ============================================================
+  Future<void> _createNotification({
+    required String recipientId,
+    required String senderId,
+    required String reviewId,
+    required String type,
+    required String message,
+  }) async {
+    // Tránh gửi thông báo cho chính mình
+    if (recipientId == senderId || recipientId.isEmpty || senderId.isEmpty)
+      return;
+
+    try {
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'userId': recipientId, // ID người nhận (Recipient ID)
+        'senderId': senderId,
+        'referenceId': reviewId, // ID liên kết đến bài viết
+        'type': type,
+        'message': message, // Nội dung thông báo
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint("Lỗi tạo thông báo: $e");
+    }
+  }
+
+  // ============================================================
+  // 🔹 XỬ LÝ LIKE POST (ĐÃ GỌI NOTIFICATION)
   // ============================================================
   Future<void> _toggleLike() async {
-    if (widget.currentAuthUserId == null) {
+    final currentUserId = widget.currentAuthUserId;
+    if (currentUserId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Bạn cần đăng nhập để thích bài viết!"),
@@ -60,20 +88,32 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
       _likeCount += likeChange;
     });
 
-    final reviewRef =
-    FirebaseFirestore.instance.collection('reviews').doc(widget.post.id);
-    final likeRef = reviewRef.collection('likes').doc(widget.currentAuthUserId);
+    final reviewRef = FirebaseFirestore.instance
+        .collection('reviews')
+        .doc(widget.post.id);
+    final likeRef = reviewRef.collection('likes').doc(currentUserId);
 
     try {
       if (!newLikedState) {
+        // Unlike
         await likeRef.delete();
         await reviewRef.update({'likeCount': FieldValue.increment(-1)});
       } else {
+        // Like
         await likeRef.set({
-          'userId': widget.currentAuthUserId,
+          'userId': currentUserId,
           'createdAt': FieldValue.serverTimestamp(),
         });
         await reviewRef.update({'likeCount': FieldValue.increment(1)});
+
+        // 🆕 TẠO THÔNG BÁO LIKE
+        _createNotification(
+          recipientId: widget.post.authorId,
+          senderId: currentUserId,
+          type: 'LIKE',
+          reviewId: widget.post.id,
+          message: "đã thích bài viết: ${widget.post.title}",
+        );
       }
     } catch (e) {
       debugPrint("Lỗi toggle like: $e");
@@ -98,9 +138,20 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
   }
 
   // ============================================================
-  // 🔹 SHOW COMMENT MODAL
+  // 🔹 SHOW COMMENT MODAL (ĐÃ TRUYỀN CALLBACK NOTIFICATION)
   // ============================================================
   void _showCommentModal() {
+    final currentUserId = widget.currentAuthUserId;
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Bạn cần đăng nhập để xem/bình luận!"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -109,16 +160,31 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
         return CommentScreen(
           reviewId: widget.post.id,
           post: widget.post,
+          // 🆕 TRUYỀN CALLBACK TẠO THÔNG BÁO
+          onCommentSent:
+              (
+                String recipientId,
+                String senderId,
+                String reviewId,
+                String message,
+              ) {
+                _createNotification(
+                  recipientId: recipientId,
+                  senderId: senderId,
+                  reviewId: reviewId,
+                  type: 'COMMENT',
+                  message: "đã bình luận bài viết: ${widget.post.title}",
+                );
+              },
         );
       },
     ).whenComplete(() {
-      // gọi callback khi modal đóng (nếu cần cập nhật)
       widget.onPostUpdated();
     });
   }
 
   // ============================================================
-  // 🔹 HÌNH ẢNH & AVATAR
+  // 🔹 HÌNH ẢNH & AVATAR (Giữ nguyên)
   // ============================================================
   Widget _getPostImage() {
     if (widget.post.imageUrls.isEmpty) return const SizedBox.shrink();
@@ -180,7 +246,7 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
             child: _getPostImage(),
           ),
 
-          // Thông tin bài + author: dùng FutureBuilder lấy user từ Firestore
+          // Thông tin bài + author
           FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             future: FirebaseFirestore.instance
                 .collection('users')
@@ -193,12 +259,12 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
               ImageProvider authorAvatar = _fallbackAuthorAvatar();
 
               if (authorSnap.connectionState == ConnectionState.waiting) {
-                // vẫn có thể hiển thị nội dung chính, chỉ loading author nhỏ
+                // Đang tải...
               } else if (authorSnap.hasData && authorSnap.data!.exists) {
                 final data = authorSnap.data!.data();
                 if (data != null) {
-                  // Lấy tên ưu tiên trường 'name' rồi 'fullName', fallback về post.author.name
-                  authorName = (data['name'] as String?) ??
+                  authorName =
+                      (data['name'] as String?) ??
                       (data['fullName'] as String?) ??
                       authorName;
 
@@ -219,9 +285,10 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
                     // tags
                     if (widget.post.tags.isNotEmpty)
                       Text(
-                        widget.post.tags
-                            .firstWhere((t) => t.startsWith('#'),
-                            orElse: () => ""),
+                        widget.post.tags.firstWhere(
+                          (t) => t.startsWith('#'),
+                          orElse: () => "",
+                        ),
                         style: TextStyle(
                           color: Colors.blue[800],
                           fontWeight: FontWeight.bold,
@@ -255,7 +322,7 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
                       children: [
                         CircleAvatar(radius: 12, backgroundImage: authorAvatar),
                         const SizedBox(width: 8),
-                        // HIỂN THỊ TÊN LẤY TỪ FIRESTORE (userSnap.data()!['name'])
+                        // HIỂN THỊ TÊN LẤY TỪ FIRESTORE
                         Text(
                           authorName,
                           style: const TextStyle(color: Colors.grey),
@@ -268,7 +335,9 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
                           child: Row(
                             children: [
                               Icon(
-                                _isLiked ? Icons.favorite : Icons.favorite_border,
+                                _isLiked
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
                                 size: 18,
                                 color: _isLiked ? Colors.red : Colors.grey,
                               ),
@@ -289,10 +358,15 @@ class _TimelinePostCardState extends State<TimelinePostCard> {
                           onTap: _showCommentModal,
                           child: Row(
                             children: [
-                              const Icon(Icons.chat_bubble_outline,
-                                  size: 18, color: Colors.grey),
+                              const Icon(
+                                Icons.chat_bubble_outline,
+                                size: 18,
+                                color: Colors.grey,
+                              ),
                               const SizedBox(width: 4),
-                              Text(numberFormat.format(widget.post.commentCount)),
+                              Text(
+                                numberFormat.format(widget.post.commentCount),
+                              ),
                             ],
                           ),
                         ),
