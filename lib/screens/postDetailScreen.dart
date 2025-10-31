@@ -6,7 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:intl/intl.dart';
 import 'package:nhom_3_damh_lttbdd/model/comment_model.dart';
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
-import 'package:nhom_3_damh_lttbdd/screens/personalProfileScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/personal_profile/personalProfileScreen.dart';
 
 // ===================================================================
 // POST DETAIL SCREEN - Hiển thị bài viết đầy đủ + Comment
