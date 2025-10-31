@@ -50,18 +50,42 @@ class _CommentScreenState extends State<CommentScreen> {
     }
 
     try {
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
-      if (userDoc.exists) {
-        final user = User.fromDoc(userDoc);
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      if (userDoc.exists && userDoc.data() != null) {
+        final data = userDoc.data()!;
+        // ✅ Ưu tiên name → fullName → fallback post.author.name
+        final String userName =
+            data['name'] ??
+                data['fullName'] ??
+                widget.post.author.name; // fallback khi không có name/fullName
+        final String avatarUrl =
+            data['avatarUrl'] ?? 'assets/images/default_avatar.png';
+
+        final user = User(
+          id: userId,
+          name: userName,
+          avatarUrl: avatarUrl,
+        );
+
         _userCache[userId] = user;
         return user;
       }
     } catch (e) {
-      print('Error fetching user $userId: $e');
+      print('⚠️ Lỗi khi lấy user $userId: $e');
     }
-    // Fallback cho user không tồn tại hoặc lỗi
-    return User(id: userId, name: 'Người dùng đã xóa', avatarUrl: 'assets/images/default_avatar.png');
+
+    // Trường hợp lỗi hoặc không tồn tại user
+    return User(
+      id: userId,
+      name: widget.post.author.name,
+      avatarUrl: 'assets/images/default_avatar.png',
+    );
   }
+
 
 
   // =======================================================================
