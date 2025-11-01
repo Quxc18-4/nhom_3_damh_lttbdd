@@ -1,102 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-// =========================================================================
-// 1. MOCK DATA MODELS VÀ ENUM
-// =========================================================================
-
-// Enum đại diện cho các loại hình (Category)
-enum SavedCategory {
-  all,
-  hotel,
-  activity,
-  review, // Bài viết
-}
-
-// ⚡️ ĐÃ ĐỔI TÊN HÀM: categoryToVietnamese -> categoryToReview
-String categoryToReview(SavedCategory category) {
-  switch (category) {
-    case SavedCategory.all:
-      return 'Tất cả';
-    case SavedCategory.hotel:
-      return 'Khách sạn';
-    case SavedCategory.activity:
-      return 'Hoạt động du lịch';
-    case SavedCategory.review:
-      return 'Bài viết';
-  }
-}
-
-// Mô hình cho một mục đã lưu (Tổng hợp thông tin cần hiển thị)
-class SavedItem {
-  final String id;
-  final String title;
-  final String subtitle;
-  final SavedCategory category;
-  final String imageUrl;
-  final String ratingText; // VD: 9.5/10
-  final String location;
-  final String author; // Dành cho Bài viết
-
-  SavedItem({
-    required this.id,
-    required this.title,
-    required this.subtitle,
-    required this.category,
-    required this.imageUrl,
-    required this.ratingText,
-    required this.location,
-    this.author = '',
-  });
-}
-
-// Dữ liệu giả cho danh sách đã lưu
-final List<SavedItem> mockAllSavedItems = [
-  SavedItem(
-    id: 's1',
-    category: SavedCategory.review,
-    title: 'Đà Lạt chào đón tôi bằng không khí se lạnh và những con đèo',
-    subtitle: 'Đôi nét về chuyến đi Đà Lạt.',
-    author: 'Khoa Pug',
-    ratingText: '',
-    location: '',
-    imageUrl: 'https://cdn-media.sforum.vn/storage/app/media/ctvseo_MH/%E1%BA%A3nh%20phong%20c%E1%BA%A3nh%20%C4%91%E1%BA%B9p/anh-phong-canh-dep-1.jpg',
-  ),
-  SavedItem(
-    id: 's2',
-    category: SavedCategory.hotel,
-    title: 'Dalat Palace Heritage Hotel',
-    subtitle: 'Nơi lưu trú sang trọng tại Đà Lạt.',
-    ratingText: '9.5/10 • 200 đánh giá',
-    location: 'Trần Phú, Đà Lạt',
-    imageUrl: 'https://statictuoitre.mediacdn.vn/thumb_w/730/2017/1-1512755474911.jpg',
-  ),
-  SavedItem(
-    id: 's3',
-    category: SavedCategory.activity,
-    title: 'Tham quan Đại Nội Huế và trải nghiệm cổ phục',
-    subtitle: 'Trải nghiệm văn hóa lịch sử.',
-    ratingText: '9.4/10 • 253 đánh giá',
-    location: 'Phường Phú Hội, Huế',
-    imageUrl: 'https://statictuoitre.mediacdn.vn/thumb_w/730/2017/13-1512755474971.jpg',
-  ),
-  SavedItem(
-    id: 's4',
-    category: SavedCategory.hotel,
-    title: 'Khách sạn Mường Thanh Đà Nẵng',
-    subtitle: 'Khách sạn ven biển chất lượng tốt.',
-    ratingText: '8.8/10 • 450 đánh giá',
-    location: 'Bãi biển Mỹ Khê, Đà Nẵng',
-    imageUrl: 'https://statictuoitre.mediacdn.vn/thumb_w/730/2017/6-1512755474939.jpg',
-  ),
-];
+// [IMPORTS BẮT BUỘC] Tái sử dụng các Models và Enum từ SavedScreen
+import 'package:nhom_3_damh_lttbdd/screens/saveScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/postDetailScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/albumDetailScreen.dart';
+import 'package:nhom_3_damh_lttbdd/model/post_model.dart'; // Import User model
 
 // =========================================================================
-// 2. ALL SAVED ITEMS SCREEN
+// 1. ALL SAVED ITEMS SCREEN (Danh sách đầy đủ + Lọc)
 // =========================================================================
 
 class AllSavedItemsScreen extends StatefulWidget {
-  const AllSavedItemsScreen({Key? key}) : super(key: key);
+  // UserId là bắt buộc để fetch data
+  final String userId;
+
+  const AllSavedItemsScreen({Key? key, required this.userId}) : super(key: key);
 
   @override
   State<AllSavedItemsScreen> createState() => _AllSavedItemsScreenState();
@@ -105,130 +25,229 @@ class AllSavedItemsScreen extends StatefulWidget {
 class _AllSavedItemsScreenState extends State<AllSavedItemsScreen> {
   SavedCategory _selectedCategory = SavedCategory.all;
 
-  // Lấy danh sách mục đã lưu dựa trên category được chọn
-  List<SavedItem> get _filteredItems {
-    if (_selectedCategory == SavedCategory.all) {
-      return mockAllSavedItems;
-    }
-    return mockAllSavedItems
-        .where((item) => item.category == _selectedCategory)
-        .toList();
-  }
+  // Futures
+  late Future<List<SavedItem>> _fullItemsFuture;
+
+  // Cache data chi tiết của Review/Place để tránh fetch lặp lại
+  final Map<String, dynamic> _contentCache = {};
+  // Cache Tên Category từ Firestore
+  final Map<String, String> _categoryNameCache = {};
+  // Cache Tên Tác giả (dùng ID)
+  final Map<String, String> _authorNameCache = {};
 
   // Danh sách các category để hiển thị thanh lọc
   final List<SavedCategory> _categories = [
     SavedCategory.all,
-    SavedCategory.hotel,
-    SavedCategory.activity,
     SavedCategory.review,
+    SavedCategory.place,
   ];
 
-  // --- HÀM HIỂN THỊ BOTTOM SHEET (ACTION MODAL) ---
-  void _showItemActionsSheet(SavedItem item) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.only(top: 16, bottom: 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // --- TIÊU ĐỀ VÀ NÚT ĐÓNG ---
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Bạn muốn làm gì?',
-                      style: GoogleFonts.montserrat(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 20, thickness: 1),
-
-              // --- CÁC TÙY CHỌN HÀNH ĐỘNG ---
-              _buildActionTile(
-                icon: Icons.bookmark_add_outlined,
-                title: 'Thêm vào bộ sưu tập',
-                onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Mục "${item.title}" đã được thêm vào bộ sưu tập.')),
-                  );
-                },
-              ),
-              _buildActionTile(
-                icon: Icons.delete_outline,
-                title: 'Xóa',
-                onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Xóa mục "${item.title}" khỏi danh sách đã lưu.')),
-                  );
-                  // TODO: Thêm logic xóa thực tế và cập nhật state/UI
-                },
-              ),
-              _buildActionTile(
-                icon: Icons.share_outlined,
-                title: 'Chia sẻ',
-                onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Chia sẻ mục "${item.title}"')),
-                  );
-                  // TODO: Thêm logic chia sẻ
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
+  @override
+  void initState() {
+    super.initState();
+    _fetchCategories();
+    _fetchFullSavedItems(); // Tải toàn bộ items
   }
 
-  // Widget: Một hàng tùy chọn trong Bottom Sheet
-  Widget _buildActionTile({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Icon(icon, size: 24, color: Colors.black87),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                title,
-                style: GoogleFonts.montserrat(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: Colors.grey),
-          ],
+  // --- HELPER FETCH FUNCTIONS ---
+
+  // Cần hàm này để hiển thị tên Category cho Place
+  Future<void> _fetchCategories() async {
+    try {
+      final categorySnap = await FirebaseFirestore.instance
+          .collection('categories')
+          .get();
+      if (mounted) {
+        for (var doc in categorySnap.docs) {
+          _categoryNameCache[doc.id] = doc['name'] ?? 'Không tên';
+        }
+        _fetchFullSavedItems();
+      }
+    } catch (e) {
+      debugPrint("Lỗi tải categories: $e");
+    }
+  }
+
+  // Fetch tên tác giả (name ?? fullName)
+  Future<String> _fetchAuthorName(String userId) async {
+    if (_authorNameCache.containsKey(userId)) {
+      return _authorNameCache[userId]!;
+    }
+
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      if (userDoc.exists) {
+        final data = userDoc.data() as Map<String, dynamic>;
+        final userName = data['name'] ?? data['fullName'] ?? 'Người dùng';
+        _authorNameCache[userId] = userName;
+        return userName;
+      }
+    } catch (e) {
+      debugPrint("Lỗi fetch author name: $e");
+    }
+    return "Người dùng ẩn danh";
+  }
+
+  // --- LOGIC TRUY VẤN TẤT CẢ ITEMS ---
+
+  void _fetchFullSavedItems() {
+    setState(() {
+      _fullItemsFuture = _loadAllItems();
+    });
+  }
+
+  Future<List<SavedItem>> _loadAllItems() async {
+    final bookmarksRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.userId)
+        .collection('bookmarks')
+        .where('albumId', isEqualTo: null)
+        .orderBy('addedAt', descending: true);
+
+    final itemsSnap = await bookmarksRef.get();
+
+    List<Future<SavedItem?>> itemFutures = itemsSnap.docs.map((
+      bookmarkDoc,
+    ) async {
+      final bookmarkData = bookmarkDoc.data();
+      final reviewId = bookmarkData['reviewID'] as String?;
+      final placeId = bookmarkData['placeID'] as String?;
+
+      String contentId = reviewId ?? placeId ?? '';
+      SavedCategory category;
+
+      if (reviewId != null) {
+        category = SavedCategory.review;
+      } else if (placeId != null) {
+        category = SavedCategory.place;
+      } else {
+        return null;
+      }
+
+      // Cache check: Content
+      if (!_contentCache.containsKey(contentId)) {
+        final collection = reviewId != null ? 'reviews' : 'places';
+        final docSnap = await FirebaseFirestore.instance
+            .collection(collection)
+            .doc(contentId)
+            .get();
+        if (docSnap.exists) {
+          _contentCache[contentId] = docSnap.data()!;
+        } else {
+          return null;
+        }
+      }
+
+      final contentData = _contentCache[contentId]!;
+
+      // Xử lý thông tin hiển thị
+      String title;
+      String authorOrRating;
+      String location;
+      String imageUrl =
+          bookmarkData['postImageUrl'] ??
+          'https://via.placeholder.com/180x160.png?text=No+Image';
+
+      if (category == SavedCategory.review) {
+        title = contentData['title'] ?? 'Bài viết không tên';
+        // 🆕 FETCH VÀ SỬ DỤNG TÊN TÁC GIẢ THAY CHO ID
+        final authorId = contentData['userId'] ?? '';
+        authorOrRating = await _fetchAuthorName(authorId);
+        location = contentData['placeName'] ?? 'Không rõ địa điểm';
+      } else {
+        // Category.place
+        title = contentData['name'] ?? 'Địa điểm không tên';
+
+        final placeCategoryIds =
+            (contentData['categories'] as List<dynamic>?)
+                ?.map((c) => c['id'])
+                .toList() ??
+            [];
+        final primaryCategory = placeCategoryIds.isNotEmpty
+            ? (_categoryNameCache[placeCategoryIds.first] ?? 'Địa điểm')
+            : 'Địa điểm';
+        authorOrRating = contentData['ratingAverage'] != null
+            ? '${contentData['ratingAverage'].toStringAsFixed(1)}/5 sao'
+            : primaryCategory;
+
+        final locationData = contentData['location'] as Map<String, dynamic>?;
+        location =
+            locationData?['fullAddress'] ??
+            contentData['locationName'] ??
+            'Không rõ địa điểm';
+
+        if (!bookmarkData.containsKey('postImageUrl') ||
+            bookmarkData['postImageUrl'] == null) {
+          final placeImages = (contentData['images'] as List<dynamic>?) ?? [];
+          if (placeImages.isNotEmpty && placeImages.first is Map) {
+            imageUrl = placeImages.first['url'] ?? imageUrl;
+          } else if (placeImages.isNotEmpty && placeImages.first is String) {
+            imageUrl = placeImages.first;
+          }
+        }
+      }
+
+      return SavedItem.fromBookmarkDoc(
+        bookmarkDoc,
+        contentId: contentId,
+        title: title,
+        subtitle: authorOrRating,
+        category: category,
+        imageUrl: imageUrl,
+        authorOrRating: authorOrRating,
+        location: location,
+      );
+    }).toList();
+
+    // Lọc bỏ các mục null (lỗi fetch hoặc item gốc không tồn tại)
+    final List<SavedItem> rawItems = (await Future.wait(
+      itemFutures,
+    )).whereType<SavedItem>().toList();
+
+    return rawItems;
+  }
+
+  // Lấy danh sách mục đã lưu dựa trên category được chọn
+  List<SavedItem> _getFilteredItems(List<SavedItem> allItems) {
+    if (_selectedCategory == SavedCategory.all) {
+      return allItems;
+    }
+    return allItems
+        .where((item) => item.category == _selectedCategory)
+        .toList();
+  }
+
+  // --- HÀM CHUYỂN HƯỚNG ---
+  void _navigateToContentDetail(SavedItem item) {
+    if (item.category == SavedCategory.review) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PostDetailScreen(reviewId: item.contentId),
         ),
-      ),
-    );
+      ).then((_) => _fetchFullSavedItems());
+    } else if (item.category == SavedCategory.place) {
+      // TODO: Điều hướng đến màn hình chi tiết Địa điểm (PlaceDetailScreen)
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chuyển đến chi tiết Địa điểm (PlaceDetailScreen)'),
+        ),
+      );
+    }
   }
+
+  void _showItemActionsSheet(SavedItem item) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Mở hành động cho: ${item.title}')));
+  }
+
+  // =========================================================================
+  // 2. UI
+  // =========================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -236,7 +255,10 @@ class _AllSavedItemsScreenState extends State<AllSavedItemsScreen> {
       appBar: AppBar(
         title: Text(
           'Các sản phẩm đã lưu',
-          style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, fontSize: 20),
+          style: GoogleFonts.montserrat(
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
         ),
         backgroundColor: Colors.white,
         elevation: 1,
@@ -253,12 +275,41 @@ class _AllSavedItemsScreenState extends State<AllSavedItemsScreen> {
 
           // --- DANH SÁCH MỤC ĐÃ LƯU ---
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.only(top: 8, bottom: 8),
-              itemCount: _filteredItems.length,
-              itemBuilder: (context, index) {
-                final item = _filteredItems[index];
-                return _buildSavedItemCard(item);
+            child: FutureBuilder<List<SavedItem>>(
+              future: _fullItemsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text('Lỗi tải dữ liệu: ${snapshot.error}'),
+                  );
+                }
+
+                // Lấy data an toàn từ snapshot
+                final allItems = snapshot.data ?? [];
+                // Lọc dữ liệu
+                final items = _getFilteredItems(allItems);
+
+                if (items.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'Không có mục đã lưu nào trong danh mục này.',
+                      style: GoogleFonts.montserrat(color: Colors.grey),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.only(top: 8, bottom: 8),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return _buildSavedItemCard(item);
+                  },
+                );
               },
             ),
           ),
@@ -267,7 +318,7 @@ class _AllSavedItemsScreenState extends State<AllSavedItemsScreen> {
     );
   }
 
-  // Widget: Thanh lọc ngang (Không thay đổi)
+  // Widget: Thanh lọc ngang
   Widget _buildFilterChips() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12.0),
@@ -285,14 +336,16 @@ class _AllSavedItemsScreenState extends State<AllSavedItemsScreen> {
               padding: const EdgeInsets.only(right: 8.0),
               child: ActionChip(
                 label: Text(
-                  categoryToReview(category),
+                  categoryToVietnamese(category), // Sử dụng hàm đã định nghĩa
                   style: GoogleFonts.montserrat(
                     fontWeight: FontWeight.w600,
                     color: isSelected ? Colors.white : Colors.black87,
                     fontSize: 14,
                   ),
                 ),
-                backgroundColor: isSelected ? Colors.orange.shade600 : Colors.grey.shade200,
+                backgroundColor: isSelected
+                    ? Colors.orange.shade600
+                    : Colors.grey.shade200,
                 onPressed: () {
                   setState(() {
                     _selectedCategory = category;
@@ -301,10 +354,15 @@ class _AllSavedItemsScreenState extends State<AllSavedItemsScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                   side: BorderSide(
-                    color: isSelected ? Colors.orange.shade600! : Colors.grey.shade300,
+                    color: isSelected
+                        ? Colors.orange.shade600!
+                        : Colors.grey.shade300,
                   ),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
               ),
             );
           },
@@ -313,187 +371,185 @@ class _AllSavedItemsScreenState extends State<AllSavedItemsScreen> {
     );
   }
 
-  // Widget: Thẻ hiển thị một mục đã lưu
+  // Widget: Thẻ hiển thị một mục đã lưu (Tái sử dụng code từ SavedScreen)
   Widget _buildSavedItemCard(SavedItem item) {
     bool isReview = item.category == SavedCategory.review;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // --- ẢNH ITEM ---
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Stack(
-                  children: [
-                    Image.network(
-                      item.imageUrl,
-                      width: 80,
-                      height: 80,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
+    return InkWell(
+      onTap: () => _navigateToContentDetail(item),
+      onLongPress: () => _showItemActionsSheet(item),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 1,
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- ẢNH ITEM ---
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Stack(
+                    children: [
+                      Image.network(
+                        item.imageUrl,
                         width: 80,
                         height: 80,
-                        color: Colors.grey[300],
-                        child: const Center(child: Icon(Icons.broken_image)),
-                      ),
-                    ),
-                    // --- CHIP Category ---
-                    Positioned(
-                      top: 4,
-                      left: 4,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: isReview ? Colors.lightBlue.shade700 : Colors.orange.shade600,
-                          borderRadius: BorderRadius.circular(6),
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          width: 80,
+                          height: 80,
+                          color: Colors.grey[300],
+                          child: const Center(child: Icon(Icons.broken_image)),
                         ),
-                        child: Text(
-                          categoryToReview(item.category),
-                          style: GoogleFonts.montserrat(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                      ),
+                      // --- CHIP Category ---
+                      Positioned(
+                        top: 4,
+                        left: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
                           ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-
-              // --- THÔNG TIN & TIÊU ĐỀ ---
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
+                          decoration: BoxDecoration(
+                            color: isReview
+                                ? Colors.lightBlue.shade700
+                                : Colors.orange.shade600,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
                           child: Text(
-                            item.title,
+                            categoryToVietnamese(item.category),
                             style: GoogleFonts.montserrat(
+                              color: Colors.white,
+                              fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Menu 3 chấm (ĐÃ SỬA ĐỔI)
-                        IconButton(
-                          onPressed: () => _showItemActionsSheet(item), // ⚡️ GỌI ACTION SHEET
-                          icon: const Icon(Icons.more_vert, color: Colors.grey),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-
-                    // Rating/Author
-                    if (!isReview)
-                      Text(
-                        item.ratingText,
-                        style: GoogleFonts.montserrat(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      )
-                    else
-                      Row(
-                        children: [
-                          const Icon(Icons.person_pin, size: 16, color: Colors.black54),
-                          const SizedBox(width: 4),
-                          Text(
-                            item.author,
-                            style: GoogleFonts.montserrat(
-                              fontSize: 12,
-                              color: Colors.black,
-                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
+                        ),
                       ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
 
-                    const SizedBox(height: 4),
-
-                    // Location
-                    if (!isReview)
+                // --- THÔNG TIN & TIÊU ĐỀ ---
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.location_on, size: 14, color: Colors.red.shade400),
-                          const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              item.location,
+                              item.title,
                               style: GoogleFonts.montserrat(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
                               ),
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          const SizedBox(width: 8),
+                          // Menu 3 chấm
+                          IconButton(
+                            onPressed: () => _showItemActionsSheet(item),
+                            icon: const Icon(
+                              Icons.more_vert,
+                              color: Colors.grey,
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
                         ],
                       ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const Divider(height: 20, thickness: 0.5),
+                      const SizedBox(height: 4),
 
-          // --- NÚT THÊM VÀO BỘ SƯU TẬP ---
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              InkWell(
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Thêm ${item.title} vào Bộ sưu tập')));
-                },
-                child: Row(
-                  children: [
-                    Icon(Icons.bookmark_add_outlined, size: 18, color: Colors.orange.shade600),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Thêm vào Bộ sưu tập',
-                      style: GoogleFonts.montserrat(
-                        color: Colors.orange.shade600,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
+                      // Rating/Author
+                      if (item.category == SavedCategory.review)
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.person_pin,
+                              size: 16,
+                              color: Colors.black54,
+                            ),
+                            const SizedBox(width: 4),
+                            // 🆕 SỬ DỤNG authorOrRating (Tên tác giả đã được fetch)
+                            Expanded(
+                              // 🆕 Thêm Expanded để tránh overflow
+                              child: Text(
+                                item.authorOrRating,
+                                style: GoogleFonts.montserrat(
+                                  fontSize: 12,
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1, // 🆕 Giới hạn 1 dòng
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Text(
+                          item.authorOrRating, // Rating/Category
+                          style: GoogleFonts.montserrat(
+                            fontSize: 12,
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+
+                      const SizedBox(height: 4),
+
+                      // Location
+                      if (item.category == SavedCategory.place)
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.location_on,
+                              size: 14,
+                              color: Colors.red.shade400,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                item.location,
+                                style: GoogleFonts.montserrat(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

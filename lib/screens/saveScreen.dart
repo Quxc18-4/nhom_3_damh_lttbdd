@@ -1,46 +1,90 @@
-// screens/saveScreen.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nhom_3_damh_lttbdd/screens/allColllectionsScreen.dart';
-import 'package:nhom_3_damh_lttbdd/screens/addSaveItemScreen.dart'; // Đảm bảo bạn có file này
+import 'package:nhom_3_damh_lttbdd/screens/addSaveItemScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/postDetailScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/albumDetailScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/addSaveItemScreen.dart'; // Import màn hình mới
+
 // =========================================================================
-// 1. MODELS DỮ LIỆU TỪ FIREBASE
+// 1. MODELS DỮ LIỆU TỪ FIREBASE (ĐÃ TỐI ƯU HÓA)
+//    NOTE: Các enum và class này được chia sẻ và sử dụng bởi AllSavedItemsScreen.
 // =========================================================================
 
-/// Dữ liệu trả về cho phần "Sản phẩm đã lưu"
+enum SavedCategory {
+  all,
+  review, // Bài viết
+  place, // Địa điểm (Hotel/Activity/Công viên)
+}
+
+String categoryToVietnamese(SavedCategory category) {
+  switch (category) {
+    case SavedCategory.all:
+      return 'Tất cả';
+    case SavedCategory.place:
+      return 'Địa điểm';
+    case SavedCategory.review:
+      return 'Bài viết';
+  }
+}
+
+/// Dữ liệu trả về cho phần "Sản phẩm đã lưu" (Preview Dashboard)
 class SavedItemsData {
-  final int totalCount; // Tổng số item (kể cả khi không hiển thị hết)
-  final List<SavedItem> items; // Danh sách item (giới hạn 6)
+  final int totalCount;
+  final List<SavedItem> items;
 
   SavedItemsData({required this.totalCount, required this.items});
 }
 
-/// Model cho một item đã lưu (Lấy từ collection 'reviews')
+/// Model cho một mục đã lưu (Đã sửa để hỗ trợ Place và Review)
 class SavedItem {
-  final String reviewId;
-  final String name;
+  final String id;
+  final String contentId; // reviewId hoặc placeId
+  final String title;
+  final String subtitle;
+  final SavedCategory category;
   final String imageUrl;
+  final String authorOrRating; // Dành cho Review (Author) hoặc Place (Rating)
+  final String location;
+
+  // Dữ liệu thô từ bookmark (tùy chọn)
+  final DocumentSnapshot bookmarkDoc;
 
   SavedItem({
-    required this.reviewId,
-    required this.name,
+    required this.id,
+    required this.contentId,
+    required this.title,
+    required this.subtitle,
+    required this.category,
     required this.imageUrl,
+    required this.authorOrRating,
+    required this.location,
+    required this.bookmarkDoc,
   });
 
-  // Factory để tạo từ một DocumentSnapshot của 'reviews'
-  factory SavedItem.fromReviewDoc(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+  // Factory để tạo từ DocumentSnapshot của 'bookmarks' (chủ yếu được dùng trong logic fetch)
+  factory SavedItem.fromBookmarkDoc(
+    DocumentSnapshot bookmarkDoc, {
+    required String contentId,
+    required String title,
+    required String subtitle,
+    required SavedCategory category,
+    required String imageUrl,
+    required String authorOrRating,
+    required String location,
+  }) {
+    // Không cần data map ở đây vì dữ liệu đã được fetch và xử lý từ bên ngoài
     return SavedItem(
-      reviewId: doc.id,
-      name: data['comment'] ?? 'Bài viết đã lưu',
-      imageUrl: (data['imageUrls'] != null &&
-              (data['imageUrls'] as List).isNotEmpty)
-          ? data['imageUrls'][0]
-          : 'https://via.placeholder.com/180x160.png?text=No+Image',
+      id: bookmarkDoc.id,
+      contentId: contentId,
+      title: title,
+      subtitle: subtitle,
+      category: category,
+      imageUrl: imageUrl,
+      authorOrRating: authorOrRating,
+      location: location,
+      bookmarkDoc: bookmarkDoc,
     );
   }
 }
@@ -50,20 +94,17 @@ class Album {
   final String id;
   final String title;
   final String? description;
-  final String? coverImageUrl;
-  // final bool creator; // <-- ĐÃ XÓA
+  final String coverImageUrl; // Không null vì luôn có placeholder
   final int reviewCount;
 
   Album({
     required this.id,
     required this.title,
     this.description,
-    this.coverImageUrl,
-    // this.creator = false, // <-- ĐÃ XÓA
+    required this.coverImageUrl,
     this.reviewCount = 0,
   });
 
-  // Factory để tạo từ một DocumentSnapshot của 'albums'
   factory Album.fromDoc(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     String? cover;
@@ -77,22 +118,18 @@ class Album {
       id: doc.id,
       title: data['title'] ?? 'Không có tiêu đề',
       description: data['description'],
-      coverImageUrl: cover, // <-- SỬA: Không dùng placeholder ở đây
-      // creator: data['creator'] ?? false, // <-- ĐÃ XÓA
+      coverImageUrl:
+          cover ?? 'https://via.placeholder.com/180x180.png?text=No+Cover',
+      reviewCount: data['reviewCount'] ?? 0, // Dùng reviewCount đã có hoặc 0
     );
   }
 
-  // Hàm copyWith để cập nhật reviewCount và ảnh bìa sau
-  Album copyWith({
-    int? reviewCount,
-    String? coverImageUrl, // <-- THÊM
-  }) {
+  Album copyWith({int? reviewCount, String? coverImageUrl}) {
     return Album(
       id: this.id,
       title: this.title,
       description: this.description,
-      coverImageUrl: coverImageUrl ?? this.coverImageUrl, // <-- CẬP NHẬT
-      // creator: this.creator, // <-- ĐÃ XÓA
+      coverImageUrl: coverImageUrl ?? this.coverImageUrl,
       reviewCount: reviewCount ?? this.reviewCount,
     );
   }
@@ -112,27 +149,61 @@ class SavedScreen extends StatefulWidget {
 }
 
 class _SavedScreenState extends State<SavedScreen> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   // Khai báo Futures để lưu trữ dữ liệu
   late Future<SavedItemsData> _savedItemsFuture;
   late Future<List<Album>> _albumsFuture;
+
+  // Cache Tên Category từ Firestore
+  final Map<String, String> _categoryNameCache = {};
+  // Cache data chi tiết của Review/Place để tránh fetch lặp lại
+  final Map<String, dynamic> _contentCache = {};
+
+  // 🆕 CACHE KẾT QUẢ CỦA _savedItemsFuture
+  SavedItemsData? _savedItemsCache;
 
   @override
   void initState() {
     super.initState();
     _fetchData();
+    _fetchCategories();
   }
 
   // Hàm helper để gọi/tải lại cả 2 future
   void _fetchData() {
-    _savedItemsFuture = _fetchSavedItems();
+    // 🆕 LƯU KẾT QUẢ VÀO CACHE SAU KHI FUTURE HOÀN TẤT
+    _savedItemsFuture = _fetchSavedItems().then((data) {
+      if (mounted) {
+        setState(() {
+          _savedItemsCache = data;
+        });
+      }
+      return data;
+    });
     _albumsFuture = _fetchAlbums();
+  }
+
+  Future<void> _fetchCategories() async {
+    try {
+      final categorySnap = await _firestore.collection('categories').get();
+      if (mounted) {
+        for (var doc in categorySnap.docs) {
+          _categoryNameCache[doc.id] = doc['name'] ?? 'Không tên';
+        }
+        // Có thể cần tải lại data sau khi cache categories
+        // setState(() {});
+      }
+    } catch (e) {
+      debugPrint("Lỗi tải categories: $e");
+    }
   }
 
   // --- HÀM TRUY VẤN DỮ LIỆU ---
 
   /// Lấy các mục đã lưu (KHÔNG thuộc album nào)
   Future<SavedItemsData> _fetchSavedItems() async {
-    final bookmarksRef = FirebaseFirestore.instance
+    final bookmarksRef = _firestore
         .collection('users')
         .doc(widget.userId)
         .collection('bookmarks')
@@ -150,34 +221,106 @@ class _SavedScreenState extends State<SavedScreen> {
         .limit(6)
         .get();
 
-    final reviewIds =
-        itemsSnap.docs.map((doc) => doc['reviewID'] as String).toList();
+    List<Future<SavedItem?>> itemFutures = itemsSnap.docs.map((
+      bookmarkDoc,
+    ) async {
+      final bookmarkData = bookmarkDoc.data();
+      final reviewId = bookmarkData['reviewID'] as String?;
+      final placeId = bookmarkData['placeID'] as String?;
 
-    if (reviewIds.isEmpty) {
-      return SavedItemsData(totalCount: totalCount, items: []);
-    }
+      String contentId = reviewId ?? placeId ?? '';
+      SavedCategory category;
 
-    final reviewSnap = await FirebaseFirestore.instance
-        .collection('reviews')
-        .where(FieldPath.documentId, whereIn: reviewIds)
-        .get();
-
-    final reviewMap = {
-      for (var doc in reviewSnap.docs) doc.id: SavedItem.fromReviewDoc(doc)
-    };
-
-    final List<SavedItem> orderedItems = [];
-    for (var id in reviewIds) {
-      if (reviewMap.containsKey(id)) {
-        orderedItems.add(reviewMap[id]!);
+      if (reviewId != null) {
+        category = SavedCategory.review;
+      } else if (placeId != null) {
+        category = SavedCategory.place;
+      } else {
+        return null;
       }
-    }
-    return SavedItemsData(totalCount: totalCount, items: orderedItems);
+
+      if (!_contentCache.containsKey(contentId)) {
+        final collection = reviewId != null ? 'reviews' : 'places';
+        final docSnap = await _firestore
+            .collection(collection)
+            .doc(contentId)
+            .get();
+        if (docSnap.exists) {
+          _contentCache[contentId] = docSnap.data()!;
+        } else {
+          return null;
+        }
+      }
+
+      final contentData = _contentCache[contentId]!;
+
+      // Xử lý thông tin hiển thị
+      String title;
+      String authorOrRating;
+      String location;
+      String imageUrl =
+          bookmarkData['postImageUrl'] ??
+          'https://via.placeholder.com/180x160.png?text=No+Image';
+
+      if (category == SavedCategory.review) {
+        title = contentData['title'] ?? 'Bài viết không tên';
+        authorOrRating = 'Author ID: ${contentData['userId']}';
+        location = contentData['placeName'] ?? 'Không rõ địa điểm';
+      } else {
+        // Category.place
+        title = contentData['name'] ?? 'Địa điểm không tên';
+
+        final placeCategoryIds =
+            (contentData['categories'] as List<dynamic>?)
+                ?.map((c) => c['id'])
+                .toList() ??
+            [];
+        final primaryCategory = placeCategoryIds.isNotEmpty
+            ? (_categoryNameCache[placeCategoryIds.first] ?? 'Địa điểm')
+            : 'Địa điểm';
+        authorOrRating = contentData['ratingAverage'] != null
+            ? '${contentData['ratingAverage'].toStringAsFixed(1)}/5 sao'
+            : primaryCategory;
+
+        final locationData = contentData['location'] as Map<String, dynamic>?;
+        location =
+            locationData?['fullAddress'] ??
+            contentData['locationName'] ??
+            'Không rõ địa điểm';
+
+        if (!bookmarkData.containsKey('postImageUrl') ||
+            bookmarkData['postImageUrl'] == null) {
+          final placeImages = (contentData['images'] as List<dynamic>?) ?? [];
+          if (placeImages.isNotEmpty && placeImages.first is Map) {
+            imageUrl = placeImages.first['url'] ?? imageUrl;
+          } else if (placeImages.isNotEmpty && placeImages.first is String) {
+            imageUrl = placeImages.first;
+          }
+        }
+      }
+
+      return SavedItem.fromBookmarkDoc(
+        bookmarkDoc,
+        contentId: contentId,
+        title: title,
+        subtitle: authorOrRating,
+        category: category,
+        imageUrl: imageUrl,
+        authorOrRating: authorOrRating,
+        location: location,
+      );
+    }).toList();
+
+    final List<SavedItem> rawItems = (await Future.wait(
+      itemFutures,
+    )).whereType<SavedItem>().toList();
+
+    return SavedItemsData(totalCount: totalCount, items: rawItems);
   }
 
   /// Lấy danh sách Albums, đếm số lượng item và LẤY ẢNH BÌA
   Future<List<Album>> _fetchAlbums() async {
-    final albumSnap = await FirebaseFirestore.instance
+    final albumSnap = await _firestore
         .collection('users')
         .doc(widget.userId)
         .collection('albums')
@@ -188,24 +331,20 @@ class _SavedScreenState extends State<SavedScreen> {
 
     // SỬA LẠI LOGIC LẤY ẢNH
     List<Future<Album>> albumFutures = albumSnap.docs.map((doc) async {
-      // 1. Tạo Album. coverImageUrl có thể là null.
       final album = Album.fromDoc(doc);
 
-      final bookmarksRef = FirebaseFirestore.instance
+      final bookmarksRef = _firestore
           .collection('users')
           .doc(widget.userId)
           .collection('bookmarks')
           .where('albumId', isEqualTo: album.id);
 
-      // 2. Đếm số lượng review
       final countSnap = await bookmarksRef.count().get();
       final int count = countSnap.count ?? 0;
 
       String? finalCoverImageUrl = album.coverImageUrl;
 
-      // 3. Nếu album KHÔNG có ảnh bìa ('photos' rỗng) VÀ có review (count > 0)
-      //    thì tìm ảnh từ review mới nhất.
-      if (count > 0 && finalCoverImageUrl == null) {
+      if (count > 0 && finalCoverImageUrl.contains('No+Cover')) {
         final firstBookmarkSnap = await bookmarksRef
             .orderBy('addedAt', descending: true) // Lấy review mới nhất
             .limit(1)
@@ -239,7 +378,30 @@ class _SavedScreenState extends State<SavedScreen> {
   // --- HÀM XỬ LÝ CHUYỂN HƯỚNG ---
   void _navigateToAllSavedItems() {
     Navigator.push(
-        context, MaterialPageRoute(builder: (context) => const AllSavedItemsScreen()));
+      context,
+      MaterialPageRoute(
+        builder: (context) => AllSavedItemsScreen(userId: widget.userId),
+      ),
+    );
+  }
+
+  void _navigateToItemDetail(SavedItem item) {
+    // Điều hướng đến chi tiết Review hoặc Place
+    if (item.category == SavedCategory.review) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PostDetailScreen(reviewId: item.contentId),
+        ),
+      ).then((_) => _fetchData());
+    } else if (item.category == SavedCategory.place) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chuyển đến chi tiết Địa điểm (PlaceDetailScreen)'),
+        ),
+      );
+      // TODO: Thêm logic điều hướng thực tế đến PlaceDetailScreen
+    }
   }
 
   void _navigateToCollectionDetail(String albumId, String albumTitle) {
@@ -252,7 +414,7 @@ class _SavedScreenState extends State<SavedScreen> {
           albumTitle: albumTitle,
         ),
       ),
-    );
+    ).then((_) => _fetchData());
   }
 
   void _navigateToAllCollections() {
@@ -270,22 +432,24 @@ class _SavedScreenState extends State<SavedScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: Text("Tạo bộ sưu tập mới"),
+          title: const Text("Tạo bộ sưu tập mới"),
           content: TextField(
             controller: _albumNameController,
             autofocus: true,
-            decoration: InputDecoration(hintText: "Nhập tên..."),
+            decoration: const InputDecoration(hintText: "Nhập tên..."),
           ),
           actions: [
             TextButton(
-              child: Text("Hủy"),
+              child: const Text("Hủy"),
               onPressed: () => Navigator.of(dialogContext).pop(),
             ),
             TextButton(
-              child: Text("Tạo"),
+              child: const Text("Tạo"),
               onPressed: () {
                 if (_albumNameController.text.trim().isNotEmpty) {
-                  Navigator.of(dialogContext).pop(_albumNameController.text.trim());
+                  Navigator.of(
+                    dialogContext,
+                  ).pop(_albumNameController.text.trim());
                 }
               },
             ),
@@ -296,17 +460,16 @@ class _SavedScreenState extends State<SavedScreen> {
 
     if (newAlbumName != null && newAlbumName.isNotEmpty) {
       try {
-        await FirebaseFirestore.instance
+        await _firestore
             .collection('users')
             .doc(widget.userId)
             .collection('albums')
             .add({
-          'title': newAlbumName,
-          'description': '',
-          'createdAt': FieldValue.serverTimestamp(),
-          // 'creator': true, // <-- ĐÃ XÓA
-          'photos': [],
-        });
+              'title': newAlbumName,
+              'description': '',
+              'createdAt': FieldValue.serverTimestamp(),
+              'photos': [],
+            });
 
         // Tải lại FutureBuilder của Album
         setState(() {
@@ -315,26 +478,31 @@ class _SavedScreenState extends State<SavedScreen> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Tạo bộ sưu tập thất bại: $e"),
-                backgroundColor: Colors.red),
+            SnackBar(
+              content: Text("Tạo bộ sưu tập thất bại: $e"),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       }
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Đã lưu',
-            style: GoogleFonts.montserrat(fontWeight: FontWeight.bold)),
+        title: Text(
+          'Đã lưu',
+          style: GoogleFonts.montserrat(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
           IconButton(
-              icon: const Icon(Icons.notifications_none), onPressed: () {}),
+            icon: const Icon(Icons.notifications_none),
+            onPressed: () {},
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -389,7 +557,9 @@ class _SavedScreenState extends State<SavedScreen> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SizedBox(
             height: 200,
-            child: Center(child: CircularProgressIndicator(color: Colors.orange)),
+            child: Center(
+              child: CircularProgressIndicator(color: Colors.orange),
+            ),
           );
         }
 
@@ -400,40 +570,45 @@ class _SavedScreenState extends State<SavedScreen> {
           );
         }
 
-        if (!snapshot.hasData || snapshot.data!.totalCount == 0) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Xem tất cả các sản phẩm đã lưu',
-                style: GoogleFonts.montserrat(
-                    fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                height: 160,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(10)
-                ),
-                child: Center(
-                  child: Text(
-                    'Bạn chưa lưu bài viết nào.',
-                    style: GoogleFonts.montserrat(fontSize: 16, color: Colors.grey),
-                  ),
-                ),
-              ),
-            ],
-          );
-        }
-
         final savedItemsData = snapshot.data!;
         final items = savedItemsData.items;
         final totalCount = savedItemsData.totalCount;
         final bool hasMore = totalCount > 6;
         final int displayCount = items.length;
         final int itemCount = hasMore ? displayCount + 1 : displayCount;
+
+        if (totalCount == 0) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Xem tất cả các sản phẩm đã lưu',
+                style: GoogleFonts.montserrat(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                height: 160,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
+                  child: Text(
+                    'Bạn chưa lưu bài viết nào.',
+                    style: GoogleFonts.montserrat(
+                      fontSize: 16,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -448,11 +623,16 @@ class _SavedScreenState extends State<SavedScreen> {
                     Text(
                       'Xem tất cả các sản phẩm đã lưu',
                       style: GoogleFonts.montserrat(
-                          fontSize: 18, fontWeight: FontWeight.bold),
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(width: 8),
-                    const Icon(Icons.arrow_forward,
-                        size: 18, color: Colors.black54),
+                    const Icon(
+                      Icons.arrow_forward,
+                      size: 18,
+                      color: Colors.black54,
+                    ),
                   ],
                 ),
               ),
@@ -476,15 +656,20 @@ class _SavedScreenState extends State<SavedScreen> {
                         decoration: BoxDecoration(
                           color: Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(10),
-                          border:
-                              Border.all(color: Colors.grey.shade300, width: 1.0),
+                          border: Border.all(
+                            color: Colors.grey.shade300,
+                            width: 1.0,
+                          ),
                         ),
                         child: Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.arrow_forward_ios,
-                                  size: 30, color: Colors.orange.shade600),
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                size: 30,
+                                color: Colors.orange.shade600,
+                              ),
                               const SizedBox(height: 8),
                               Text(
                                 'Xem tất cả\n($totalCount mục)',
@@ -505,12 +690,8 @@ class _SavedScreenState extends State<SavedScreen> {
                   final item = items[index];
                   return InkWell(
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => PostDetailScreen(reviewId: item.reviewId),
-                        ),
-                      );
+                      // 🆕 CHUYỂN ĐẾN MÀN HÌNH CHI TIẾT DỰA TRÊN CATEGORY/CONTENTID
+                      _navigateToItemDetail(item);
                     },
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
@@ -519,8 +700,10 @@ class _SavedScreenState extends State<SavedScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(10),
-                        border:
-                            Border.all(color: Colors.grey.shade300, width: 1.0),
+                        border: Border.all(
+                          color: Colors.grey.shade300,
+                          width: 1.0,
+                        ),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.grey.withOpacity(0.1),
@@ -534,8 +717,9 @@ class _SavedScreenState extends State<SavedScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           ClipRRect(
-                            borderRadius:
-                                const BorderRadius.vertical(top: Radius.circular(10)),
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(10),
+                            ),
                             child: Image.network(
                               item.imageUrl,
                               width: 180,
@@ -543,20 +727,22 @@ class _SavedScreenState extends State<SavedScreen> {
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) =>
                                   Container(
-                                width: 180,
-                                height: 160,
-                                color: Colors.grey[300],
-                                child: const Center(child: Text('Ảnh lỗi')),
-                              ),
+                                    width: 180,
+                                    height: 160,
+                                    color: Colors.grey[300],
+                                    child: const Center(child: Text('Ảnh lỗi')),
+                                  ),
                             ),
                           ),
                           Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8.0, vertical: 4.0),
+                              horizontal: 8.0,
+                              vertical: 4.0,
+                            ),
                             child: SizedBox(
                               width: 180,
                               child: Text(
-                                item.name,
+                                item.title, // 🆕 SỬ DỤNG item.title
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.arima(
                                   fontWeight: FontWeight.w700,
@@ -610,7 +796,9 @@ class _SavedScreenState extends State<SavedScreen> {
             Text(
               'Bộ sưu tập',
               style: GoogleFonts.montserrat(
-                  fontSize: 20, fontWeight: FontWeight.bold),
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 16),
             GridView.builder(
@@ -638,8 +826,11 @@ class _SavedScreenState extends State<SavedScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.add_circle_outline,
-                              color: Colors.green.shade700, size: 40),
+                          Icon(
+                            Icons.add_circle_outline,
+                            color: Colors.green.shade700,
+                            size: 40,
+                          ),
                           const SizedBox(height: 8),
                           Text(
                             'Tạo bộ sưu tập mới',
@@ -647,6 +838,7 @@ class _SavedScreenState extends State<SavedScreen> {
                             style: GoogleFonts.montserrat(
                               color: Colors.green.shade800,
                               fontWeight: FontWeight.bold,
+                              fontSize: 14,
                             ),
                           ),
                         ],
@@ -670,8 +862,11 @@ class _SavedScreenState extends State<SavedScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.collections_bookmark_outlined,
-                                color: Colors.orange.shade600, size: 35),
+                            Icon(
+                              Icons.collections_bookmark_outlined,
+                              color: Colors.orange.shade600,
+                              size: 35,
+                            ),
                             const SizedBox(height: 8),
                             Text(
                               'Xem tất cả\nBộ sưu tập',
@@ -692,10 +887,12 @@ class _SavedScreenState extends State<SavedScreen> {
                 // CÁC BỘ SƯU TẬP (ALBUMS)
                 final collectionIndex = index - 1;
                 final collection = albums[collectionIndex];
-                
+
                 return InkWell(
-                  onTap: () =>
-                      _navigateToCollectionDetail(collection.id, collection.title),
+                  onTap: () => _navigateToCollectionDetail(
+                    collection.id,
+                    collection.title,
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   child: Stack(
                     children: [
@@ -707,15 +904,16 @@ class _SavedScreenState extends State<SavedScreen> {
                             BlendMode.darken,
                           ),
                           child: Image.network(
-                            collection.coverImageUrl!, // <-- Đã có placeholder từ _fetchAlbums
+                            collection
+                                .coverImageUrl, // <-- Đã có placeholder từ _fetchAlbums
                             fit: BoxFit.cover,
                             width: double.infinity,
                             height: double.infinity,
                             errorBuilder: (context, error, stackTrace) =>
                                 Container(
-                              color: Colors.blueGrey,
-                              child: const Center(child: Text('Ảnh lỗi')),
-                            ),
+                                  color: Colors.blueGrey,
+                                  child: const Center(child: Text('Ảnh lỗi')),
+                                ),
                           ),
                         ),
                       ),
@@ -738,7 +936,9 @@ class _SavedScreenState extends State<SavedScreen> {
                             Text(
                               '${collection.reviewCount} Reviews',
                               style: GoogleFonts.montserrat(
-                                  color: Colors.white70, fontSize: 12),
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
