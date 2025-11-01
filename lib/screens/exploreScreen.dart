@@ -6,7 +6,17 @@ import 'package:nhom_3_damh_lttbdd/screens/checkinScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/personal_profile/personalProfileScreen.dart';
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
 import 'package:nhom_3_damh_lttbdd/screens/commentScreen.dart';
-import 'package:nhom_3_damh_lttbdd/screens/notificationScreen.dart'; // Import NotificationScreen
+import 'package:nhom_3_damh_lttbdd/screens/notificationScreen.dart';
+
+// Định nghĩa lại kiểu hàm cho rõ ràng
+typedef NotificationCreator =
+    Future<void> Function({
+      required String recipientId,
+      required String senderId,
+      required String reviewId,
+      required String type,
+      required String message,
+    });
 
 class ExploreScreen extends StatefulWidget {
   final String userId;
@@ -20,14 +30,15 @@ class ExploreScreen extends StatefulWidget {
 class _ExploreScreenState extends State<ExploreScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  List<Post> _posts = [];
+  List<Post> _allPosts = []; // Lưu trữ tất cả bài viết
+  Set<String> _followingIds = {}; // ID của những người đang theo dõi
   bool _isLoading = true;
 
   String _userName = "Đang tải...";
   String _userAvatarUrl = "assets/images/default_avatar.png";
   bool _isUserDataLoading = true;
 
-  // Biến đếm thông báo chưa đọc (được cập nhật từ HomePage)
+  // Biến đếm thông báo chưa đọc (tạm thời)
   int _unreadNotificationCount = 0;
 
   bool get _isAuthenticated => auth.FirebaseAuth.instance.currentUser != null;
@@ -37,13 +48,36 @@ class _ExploreScreenState extends State<ExploreScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _fetchUserData();
-    _fetchPosts();
+    _fetchFollowingList().then((_) {
+      _fetchPosts();
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  // 🆕 Tải danh sách người dùng đang theo dõi
+  Future<void> _fetchFollowingList() async {
+    if (!_isAuthenticated) return;
+    try {
+      final followingSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .collection('following')
+          .get();
+
+      if (mounted) {
+        setState(() {
+          // Lấy ID của các document trong subcollection 'following'
+          _followingIds = followingSnapshot.docs.map((doc) => doc.id).toSet();
+        });
+      }
+    } catch (e) {
+      debugPrint("Lỗi tải danh sách Following: $e");
+    }
   }
 
   Future<void> _fetchUserData() async {
@@ -93,7 +127,7 @@ class _ExploreScreenState extends State<ExploreScreen>
       if (reviewSnapshot.docs.isEmpty) {
         if (mounted) {
           setState(() {
-            _posts = [];
+            _allPosts = [];
             _isLoading = false;
           });
         }
@@ -122,7 +156,7 @@ class _ExploreScreenState extends State<ExploreScreen>
 
               if (authorDoc.exists) {
                 final authorData = authorDoc.data() as Map<String, dynamic>;
-                // Ưu tiên 'name', nếu không có thì dùng 'fullName'
+                // Ưu tiên 'name', nếu không có thì dùng 'fullName' (LOGIC CHUNG)
                 final displayName =
                     authorData['name']?.toString().trim().isNotEmpty == true
                     ? authorData['name']
@@ -144,7 +178,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                 );
               }
             } catch (e) {
-              print("Lỗi fetch author $authorId: $e");
+              debugPrint("Lỗi fetch author $authorId: $e");
               postAuthor = User(
                 id: authorId,
                 name: 'Lỗi tải User',
@@ -165,7 +199,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                 .get();
             isLiked = likeDoc.exists;
           } catch (e) {
-            print("Lỗi kiểm tra like: $e");
+            debugPrint("Lỗi kiểm tra like: $e");
           }
         }
 
@@ -174,7 +208,7 @@ class _ExploreScreenState extends State<ExploreScreen>
 
       if (mounted) {
         setState(() {
-          _posts = fetchedPosts;
+          _allPosts = fetchedPosts;
           _isLoading = false;
         });
       }
@@ -333,7 +367,14 @@ class _ExploreScreenState extends State<ExploreScreen>
                   )
                 : TabBarView(
                     controller: _tabController,
-                    children: [_buildPostListView(), _buildPostListView()],
+                    children: [
+                      _buildPostListView(
+                        forFollowing: true,
+                      ), // Tab Đang theo dõi
+                      _buildPostListView(
+                        forFollowing: false,
+                      ), // Tab Dành cho bạn
+                    ],
                   ),
           ),
         ],
@@ -354,7 +395,6 @@ class _ExploreScreenState extends State<ExploreScreen>
     required String type,
     required String message,
   }) async {
-    // Tránh gửi thông báo cho chính mình
     if (recipientId == senderId || recipientId.isEmpty || senderId.isEmpty)
       return;
 
@@ -428,7 +468,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                 ),
               ),
               const Spacer(),
-              // Nút Thông báo (hiện chưa có badge ở đây, badge nằm ở HomePage)
+              // Nút Thông báo (sử dụng _unreadNotificationCount từ HomePage)
               IconButton(
                 icon: Icon(
                   Icons.notifications_none,
@@ -436,7 +476,6 @@ class _ExploreScreenState extends State<ExploreScreen>
                   size: 28,
                 ),
                 onPressed: () {
-                  // Điều hướng đến NotificationScreen
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -479,28 +518,52 @@ class _ExploreScreenState extends State<ExploreScreen>
     );
   }
 
-  Widget _buildPostListView() {
-    if (_posts.isEmpty) {
-      return const Center(
+  // 🆕 Widget hiển thị ListView với logic lọc
+  Widget _buildPostListView({required bool forFollowing}) {
+    // 1. Lọc danh sách bài viết dựa trên tab
+    List<Post> filteredPosts;
+
+    if (forFollowing) {
+      // Tab "Đang theo dõi": Chỉ hiển thị bài viết của những người mình follow
+      filteredPosts = _allPosts
+          .where((post) => _followingIds.contains(post.authorId))
+          .toList();
+    } else {
+      // Tab "Dành cho bạn": Hiển thị bài viết của những người mình CHƯA follow
+      // và bài viết của chính mình (widget.userId)
+      filteredPosts = _allPosts
+          .where(
+            (post) =>
+                post.authorId ==
+                    widget.userId || // Giữ lại bài viết của chính mình
+                !_followingIds.contains(post.authorId),
+          )
+          .toList();
+    }
+
+    if (filteredPosts.isEmpty) {
+      final message = forFollowing
+          ? "Chưa có bài viết nào từ những người bạn theo dõi."
+          : "Chưa có bài viết mới.";
+
+      return Center(
         child: Text(
-          "Chưa có bài viết nào.",
-          style: TextStyle(fontSize: 16, color: Colors.grey),
+          message,
+          style: const TextStyle(fontSize: 16, color: Colors.grey),
         ),
       );
     }
 
     return ListView.builder(
-      itemCount: _posts.length,
+      itemCount: filteredPosts.length,
       itemBuilder: (context, index) {
-        final post = _posts[index];
+        final post = filteredPosts[index];
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4.0),
           child: PostCard(
-            // Sử dụng PostCard
             post: post,
             userId: widget.userId,
             onPostUpdated: () => _fetchPosts(),
-            // 🆕 TRUYỀN HÀM TẠO THÔNG BÁO VÀO POSTCARD
             createNotification: _createNotification,
           ),
         );
@@ -512,16 +575,6 @@ class _ExploreScreenState extends State<ExploreScreen>
 // ===================================================================
 // 3. POST CARD (ĐÃ CẬP NHẬT ĐỂ NHẬN HÀM TẠO THÔNG BÁO)
 // ===================================================================
-
-// Định nghĩa lại kiểu hàm cho rõ ràng
-typedef NotificationCreator =
-    Future<void> Function({
-      required String recipientId,
-      required String senderId,
-      required String reviewId,
-      required String type,
-      required String message,
-    });
 
 class PostCard extends StatefulWidget {
   final Post post;
@@ -536,7 +589,7 @@ class PostCard extends StatefulWidget {
     required this.post,
     required this.userId,
     required this.onPostUpdated,
-    required this.createNotification, // 🆕 YÊU CẦU THAM SỐ
+    required this.createNotification,
   }) : super(key: key);
 
   @override
@@ -645,7 +698,7 @@ class _PostCardState extends State<PostCard> {
         return CommentScreen(
           reviewId: widget.post.id,
           post: widget.post,
-          // 🆕 TRUYỀN HÀM TẠO THÔNG BÁO TỪ EXPLORESCREEN
+          // 🆕 TRUYỀN HÀM TẠO THÔNG BÁO
           onCommentSent:
               (
                 String recipientId,
@@ -676,7 +729,7 @@ class _PostCardState extends State<PostCard> {
     return AssetImage(widget.post.author.avatarUrl);
   }
 
-  // ... (Giữ nguyên _buildImage, _buildPhotoGrid, _buildActionButton, _SaveDialogContent)
+  // ... (Các widget UI khác như _buildPhotoGrid, _buildActionButton, etc. giữ nguyên)
 
   Widget _buildImage(
     String imageUrl, {
@@ -889,7 +942,6 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
-  // [Build Action Button - Giữ nguyên]
   Widget _buildActionButton({
     required IconData icon,
     required String? text,
@@ -913,7 +965,11 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
-  // [Build Method - Giữ nguyên]
+  Widget _buildSaveDialogContent() {
+    // Đây chỉ là một placeholder, logic Save Dialog thực tế nằm trong lớp riêng.
+    return const SizedBox.shrink();
+  }
+
   @override
   Widget build(BuildContext context) {
     final numberFormat = NumberFormat.compact(locale: "en_US");
@@ -1030,192 +1086,6 @@ class _PostCardState extends State<PostCard> {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ===================================================================
-// 4. SAVE DIALOG (Giữ nguyên logic)
-// ===================================================================
-
-class _SaveDialogContent extends StatefulWidget {
-  final String userId;
-  final String reviewId;
-  final String authorId;
-  final String? postImageUrl;
-
-  const _SaveDialogContent({
-    required this.userId,
-    required this.reviewId,
-    required this.authorId,
-    this.postImageUrl,
-  });
-
-  @override
-  State<_SaveDialogContent> createState() => _SaveDialogContentState();
-}
-
-class _SaveDialogContentState extends State<_SaveDialogContent> {
-  Future<void> _showCreateAlbumDialog() async {
-    final TextEditingController _albumNameController = TextEditingController();
-
-    final String? newAlbumName = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text("Tạo album mới"),
-          content: TextField(
-            controller: _albumNameController,
-            autofocus: true,
-            decoration: const InputDecoration(hintText: "Nhập tên album..."),
-          ),
-          actions: [
-            TextButton(
-              child: const Text("Hủy"),
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
-            TextButton(
-              child: const Text("Tạo"),
-              onPressed: () {
-                if (_albumNameController.text.trim().isNotEmpty) {
-                  Navigator.of(
-                    dialogContext,
-                  ).pop(_albumNameController.text.trim());
-                }
-              },
-            ),
-          ],
-        );
-      },
-    );
-
-    if (newAlbumName != null && newAlbumName.isNotEmpty) {
-      try {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(widget.userId)
-            .collection('albums')
-            .add({
-              'title': newAlbumName,
-              'description': '',
-              'createdAt': FieldValue.serverTimestamp(),
-              'photos': [],
-            });
-        if (mounted) setState(() {});
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Tạo album thất bại: $e"),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  Future<void> _saveBookmark({String? albumId}) async {
-    final bool isCreator = (widget.userId == widget.authorId);
-
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .collection('bookmarks')
-          .add({
-            'reviewID': widget.reviewId,
-            'albumId': albumId,
-            'addedAt': FieldValue.serverTimestamp(),
-            'postImageUrl': widget.postImageUrl,
-            'creator': isCreator,
-          });
-
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(albumId == null ? "Đã lưu!" : "Đã lưu vào album!"),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Lưu thất bại: $e"),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      debugPrint("Lỗi lưu bookmark: $e");
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text("Lưu vào bộ sưu tập"),
-      content: FutureBuilder<QuerySnapshot>(
-        future: FirebaseFirestore.instance
-            .collection('users')
-            .doc(widget.userId)
-            .collection('albums')
-            .orderBy('createdAt', descending: true)
-            .get(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const SizedBox(
-              height: 100,
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-          if (snapshot.hasError) {
-            return const Text("Không thể tải album. Vui lòng thử lại.");
-          }
-          final albums = snapshot.data?.docs ?? [];
-
-          return SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: albums.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return ListTile(
-                    leading: const Icon(Icons.add_box_outlined),
-                    title: const Text("Tạo album mới..."),
-                    onTap: _showCreateAlbumDialog,
-                  );
-                }
-                final albumDoc = albums[index - 1];
-                final albumData = albumDoc.data() as Map<String, dynamic>;
-                final String albumId = albumDoc.id;
-                final String albumTitle =
-                    albumData['title'] ?? 'Album không tên';
-
-                return ListTile(
-                  leading: const Icon(Icons.photo_album_outlined),
-                  title: Text(albumTitle),
-                  onTap: () => _saveBookmark(albumId: albumId),
-                );
-              },
-            ),
-          );
-        },
-      ),
-      actions: [
-        TextButton(
-          child: const Text("Hủy"),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        TextButton(
-          child: const Text("LƯU (KHÔNG THÊM VÀO ALBUM)"),
-          onPressed: () => _saveBookmark(albumId: null),
-        ),
-      ],
     );
   }
 }
