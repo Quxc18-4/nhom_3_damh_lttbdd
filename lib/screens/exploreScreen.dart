@@ -368,11 +368,9 @@ class _ExploreScreenState extends State<ExploreScreen>
                 : TabBarView(
                     controller: _tabController,
                     children: [
+                      _buildPostListView(isExploreTab: true), // Tab Khám phá
                       _buildPostListView(
-                        forFollowing: true,
-                      ), // Tab Đang theo dõi
-                      _buildPostListView(
-                        forFollowing: false,
+                        isExploreTab: false,
                       ), // Tab Dành cho bạn
                     ],
                   ),
@@ -507,8 +505,8 @@ class _ExploreScreenState extends State<ExploreScreen>
         TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(text: "Đang theo dõi"),
-            Tab(text: "Dành cho bạn"),
+            Tab(text: "Khám phá"), // Tab 1: Khám phá (Tất cả)
+            Tab(text: "Dành cho bạn"), // Tab 2: Dành cho bạn (Feed cá nhân)
           ],
           labelColor: Colors.orange,
           unselectedLabelColor: Colors.grey,
@@ -519,32 +517,27 @@ class _ExploreScreenState extends State<ExploreScreen>
   }
 
   // 🆕 Widget hiển thị ListView với logic lọc
-  Widget _buildPostListView({required bool forFollowing}) {
+  Widget _buildPostListView({required bool isExploreTab}) {
     // 1. Lọc danh sách bài viết dựa trên tab
     List<Post> filteredPosts;
 
-    if (forFollowing) {
-      // Tab "Đang theo dõi": Chỉ hiển thị bài viết của những người mình follow
-      filteredPosts = _allPosts
-          .where((post) => _followingIds.contains(post.authorId))
-          .toList();
+    if (isExploreTab) {
+      // Tab "Khám phá": Hiển thị TẤT CẢ bài viết
+      filteredPosts = _allPosts;
     } else {
-      // Tab "Dành cho bạn": Hiển thị bài viết của những người mình CHƯA follow
-      // và bài viết của chính mình (widget.userId)
+      // Tab "Dành cho bạn": Bài viết của bạn (widget.userId) VÀ những người bạn follow
+      final Set<String> authorizedAuthors = _followingIds.toSet()
+        ..add(widget.userId);
+
       filteredPosts = _allPosts
-          .where(
-            (post) =>
-                post.authorId ==
-                    widget.userId || // Giữ lại bài viết của chính mình
-                !_followingIds.contains(post.authorId),
-          )
+          .where((post) => authorizedAuthors.contains(post.authorId))
           .toList();
     }
 
     if (filteredPosts.isEmpty) {
-      final message = forFollowing
-          ? "Chưa có bài viết nào từ những người bạn theo dõi."
-          : "Chưa có bài viết mới.";
+      final message = isExploreTab
+          ? "Chưa có bài viết nào để khám phá. Hãy là người đầu tiên tạo một bài!"
+          : "Bạn chưa có bài viết nào hoặc chưa theo dõi ai.";
 
       return Center(
         child: Text(
@@ -599,6 +592,7 @@ class PostCard extends StatefulWidget {
 class _PostCardState extends State<PostCard> {
   late bool _isLiked;
   late int _likeCount;
+  late bool _isSaved; // ← BIẾN TRẠNG THÁI LƯU
   bool _isProcessing = false;
 
   @override
@@ -606,6 +600,29 @@ class _PostCardState extends State<PostCard> {
     super.initState();
     _isLiked = widget.post.isLikedByUser;
     _likeCount = widget.post.likeCount;
+    _isSaved = false;
+    _checkIfSaved(); // ← KIỂM TRA TRẠNG THÁI LƯU
+  }
+
+  // ← THÊM HÀM KIỂM TRA ĐÃ LƯU CHƯA
+  Future<void> _checkIfSaved() async {
+    try {
+      final bookmarkQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .collection('bookmarks')
+          .where('reviewID', isEqualTo: widget.post.id)
+          .limit(1)
+          .get();
+
+      if (mounted) {
+        setState(() {
+          _isSaved = bookmarkQuery.docs.isNotEmpty;
+        });
+      }
+    } catch (e) {
+      debugPrint("Lỗi kiểm tra bookmark: $e");
+    }
   }
 
   // ✅ Toggle Like/Unlike (ĐÃ GỌI NOTIFICATION)
@@ -722,14 +739,40 @@ class _PostCardState extends State<PostCard> {
     });
   }
 
+  // ← THÊM HÀM HIỂN THỊ SAVE DIALOG
+  void _showSaveDialog(BuildContext context) {
+    if (auth.FirebaseAuth.instance.currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Bạn cần đăng nhập để lưu bài viết!"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => _SaveDialogContent(
+        userId: widget.userId,
+        reviewId: widget.post.id,
+        authorId: widget.post.authorId,
+        postImageUrl: widget.post.imageUrls.isNotEmpty
+            ? widget.post.imageUrls.first
+            : null,
+      ),
+    ).then((_) {
+      // Cập nhật trạng thái sau khi lưu
+      _checkIfSaved();
+    });
+  }
+
   ImageProvider _getAuthorAvatar() {
     if (widget.post.author.avatarUrl.startsWith('http')) {
       return NetworkImage(widget.post.author.avatarUrl);
     }
     return AssetImage(widget.post.author.avatarUrl);
   }
-
-  // ... (Các widget UI khác như _buildPhotoGrid, _buildActionButton, etc. giữ nguyên)
 
   Widget _buildImage(
     String imageUrl, {
@@ -965,11 +1008,6 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
-  Widget _buildSaveDialogContent() {
-    // Đây chỉ là một placeholder, logic Save Dialog thực tế nằm trong lớp riêng.
-    return const SizedBox.shrink();
-  }
-
   @override
   Widget build(BuildContext context) {
     final numberFormat = NumberFormat.compact(locale: "en_US");
@@ -1077,15 +1115,214 @@ class _PostCardState extends State<PostCard> {
                 text: null,
                 onPressed: () {},
               ),
+              // Nút Bookmark
               _buildActionButton(
-                icon: Icons.bookmark_border,
+                icon: _isSaved ? Icons.bookmark : Icons.bookmark_border,
                 text: null,
-                onPressed: () {}, // Sử dụng _showSaveDialog nếu có
+                onPressed: () => _showSaveDialog(context),
+                color: _isSaved ? Colors.orange : Colors.grey[700],
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+// ===================================================================
+// 4. SAVE DIALOG - TẠO VÀ LƯU VÀO BỘ SƯU TẬP
+// ===================================================================
+
+class _SaveDialogContent extends StatefulWidget {
+  final String userId;
+  final String reviewId;
+  final String authorId;
+  final String? postImageUrl;
+
+  const _SaveDialogContent({
+    required this.userId,
+    required this.reviewId,
+    required this.authorId,
+    this.postImageUrl,
+  });
+
+  @override
+  State<_SaveDialogContent> createState() => _SaveDialogContentState();
+}
+
+class _SaveDialogContentState extends State<_SaveDialogContent> {
+  bool get _isAuthenticated => auth.FirebaseAuth.instance.currentUser != null;
+
+  // 🆕 KIỂM TRA AUTH TRƯỚC KHI THỰC HIỆN GHI
+  Future<void> _showCreateAlbumDialog() async {
+    if (!_isAuthenticated) {
+      _showErrorSnackbar("Bạn cần đăng nhập để tạo album.");
+      return;
+    }
+
+    final TextEditingController _albumNameController = TextEditingController();
+
+    final String? newAlbumName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text("Tạo album mới"),
+          content: TextField(
+            controller: _albumNameController,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: "Nhập tên album..."),
+          ),
+          actions: [
+            TextButton(
+              child: const Text("Hủy"),
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+            TextButton(
+              child: const Text("Tạo"),
+              onPressed: () {
+                if (_albumNameController.text.trim().isNotEmpty) {
+                  Navigator.of(
+                    dialogContext,
+                  ).pop(_albumNameController.text.trim());
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+
+    if (newAlbumName != null && newAlbumName.isNotEmpty) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.userId)
+            .collection('albums')
+            .add({
+              'title': newAlbumName,
+              'description': '',
+              'createdAt': FieldValue.serverTimestamp(),
+              'photos': [],
+            });
+        if (mounted) setState(() {});
+      } catch (e) {
+        _showErrorSnackbar("Tạo album thất bại: $e");
+      }
+    }
+  }
+
+  // 🆕 KIỂM TRA AUTH TRƯỚC KHI THỰC HIỆN GHI
+  Future<void> _saveBookmark({String? albumId}) async {
+    if (!_isAuthenticated) {
+      _showErrorSnackbar("Bạn cần đăng nhập để lưu.");
+      return;
+    }
+
+    final bool isCreator = (widget.userId == widget.authorId);
+
+    try {
+      // Logic đã được kiểm tra: request.auth.uid phải khớp với widget.userId (người lưu)
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .collection('bookmarks')
+          .add({
+            'reviewID': widget.reviewId,
+            'albumId': albumId,
+            'addedAt': FieldValue.serverTimestamp(),
+            'postImageUrl': widget.postImageUrl,
+            'creator': isCreator,
+          });
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(albumId == null ? "Đã lưu!" : "Đã lưu vào album!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      _showErrorSnackbar("Lưu thất bại: $e");
+    }
+  }
+
+  void _showErrorSnackbar(String message) {
+    if (mounted) {
+      // Đảm bảo pop dialog trước khi show snackbar
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("Lưu vào bộ sưu tập"),
+      content: FutureBuilder<QuerySnapshot>(
+        future: FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.userId)
+            .collection('albums')
+            .orderBy('createdAt', descending: true)
+            .get(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const SizedBox(
+              height: 100,
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (snapshot.hasError) {
+            return const Text("Không thể tải album. Vui lòng thử lại.");
+          }
+          final albums = snapshot.data?.docs ?? [];
+
+          return SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: albums.length + 1,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return ListTile(
+                    leading: const Icon(Icons.add_box_outlined),
+                    title: const Text("Tạo album mới..."),
+                    onTap: _showCreateAlbumDialog,
+                  );
+                }
+                final albumDoc = albums[index - 1];
+                final albumData = albumDoc.data() as Map<String, dynamic>;
+                final String albumId = albumDoc.id;
+                final String albumTitle =
+                    albumData['title'] ?? 'Album không tên';
+
+                return ListTile(
+                  leading: const Icon(Icons.photo_album_outlined),
+                  title: Text(albumTitle),
+                  onTap: () => _saveBookmark(albumId: albumId),
+                );
+              },
+            ),
+          );
+        },
+      ),
+      actions: [
+        TextButton(
+          child: const Text("Hủy"),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        TextButton(
+          child: const Text("LƯU (KHÔNG THÊM VÀO ALBUM)"),
+          onPressed: () => _saveBookmark(albumId: null),
+        ),
+      ],
     );
   }
 }

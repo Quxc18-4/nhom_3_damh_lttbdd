@@ -7,14 +7,14 @@ import 'package:nhom_3_damh_lttbdd/screens/saveScreen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'dart:async'; 
+import 'dart:async';
 
 // Import Model và Screens mới/cần thiết
 import 'package:nhom_3_damh_lttbdd/model/activity.dart';
 import 'package:nhom_3_damh_lttbdd/services/local_plan_service.dart';
 import 'package:nhom_3_damh_lttbdd/model/banner.dart';
 import 'bannerDetailScreen.dart';
-import 'notificationScreen.dart'; 
+import 'notificationScreen.dart';
 
 // Giả định các đường dẫn assets (GIỮ NGUYÊN)
 const String _ASSET_AVATAR = 'assets/images/image 8.png';
@@ -83,7 +83,7 @@ class _HomePageState extends State<HomePage> {
     _loadDayActivitiesPreview();
     _loadUserData();
     _loadActiveBanners();
-    _setupNotificationListener(); 
+    _setupNotificationListener();
   }
 
   @override
@@ -667,10 +667,7 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
           const SizedBox(height: 4),
-          const Text(
-            'Đã khám phá 8/64 tỉnh thành tại Việt Nam',
-            style: TextStyle(color: Colors.grey, fontSize: 13),
-          ),
+          const Text('', style: TextStyle(color: Colors.grey, fontSize: 13)),
         ],
       ),
     );
@@ -812,25 +809,25 @@ class _HomePageState extends State<HomePage> {
   // --- NAVIGATION LOGIC (Giữ nguyên) ---
 
   Widget _buildBookingContent() => const Center(
-        child: Text(
-          'Đặt chỗ của tôi',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-        ),
-      );
+    child: Text(
+      'Đặt chỗ của tôi',
+      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+    ),
+  );
 
   Widget _buildSavedContent() => const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.bookmark_outline, size: 80, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
-              'Đã lưu',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-            ),
-          ],
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.bookmark_outline, size: 80, color: Colors.grey),
+        SizedBox(height: 16),
+        Text(
+          'Đã lưu',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _getSelectedContent() {
     switch (_selectedIndex) {

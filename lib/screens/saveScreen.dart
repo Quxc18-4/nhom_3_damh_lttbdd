@@ -582,7 +582,7 @@ class _SavedScreenState extends State<SavedScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Xem tất cả các sản phẩm đã lưu',
+                'Xem tất cả các bài viết đã lưu',
                 style: GoogleFonts.montserrat(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -621,7 +621,7 @@ class _SavedScreenState extends State<SavedScreen> {
                 child: Row(
                   children: [
                     Text(
-                      'Xem tất cả các sản phẩm đã lưu',
+                      'Xem tất cả các bài viết đã lưu',
                       style: GoogleFonts.montserrat(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
