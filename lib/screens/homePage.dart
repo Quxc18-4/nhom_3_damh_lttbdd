@@ -2,19 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:convex_bottom_bar/convex_bottom_bar.dart';
 import 'package:nhom_3_damh_lttbdd/screens/profileScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/exploreScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/journey_map_service.dart';
 import 'tripPlannerScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/saveScreen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'dart:async'; 
+import 'dart:async';
 
 // Import Model và Screens mới/cần thiết
 import 'package:nhom_3_damh_lttbdd/model/activity.dart';
 import 'package:nhom_3_damh_lttbdd/services/local_plan_service.dart';
 import 'package:nhom_3_damh_lttbdd/model/banner.dart';
+import 'package:nhom_3_damh_lttbdd/screens/journeyMapScreen.dart';
+// Dùng để lấy tổng số tỉnh (kAllProvinceIds)
+import 'package:nhom_3_damh_lttbdd/constants/cityExchange.dart';
 import 'bannerDetailScreen.dart';
-import 'notificationScreen.dart'; 
+import 'notificationScreen.dart';
 
 // Giả định các đường dẫn assets (GIỮ NGUYÊN)
 const String _ASSET_AVATAR = 'assets/images/image 8.png';
@@ -43,6 +47,10 @@ class _HomePageState extends State<HomePage> {
   String _userNickname = '';
   bool _isLoadingUserData = true;
   List<BannerModel> _activeBanners = [];
+
+  final JourneyMapService _mapService = JourneyMapService();
+  Set<String> _visitedProvinces = {};
+  bool _isLoadingMap = true;
 
   // [MỚI] Biến và Subscription cho Thông báo
   int _unreadNotificationCount = 0;
@@ -83,7 +91,8 @@ class _HomePageState extends State<HomePage> {
     _loadDayActivitiesPreview();
     _loadUserData();
     _loadActiveBanners();
-    _setupNotificationListener(); 
+    _setupNotificationListener();
+    _loadVisitedProvinces();
   }
 
   @override
@@ -204,6 +213,27 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _loadVisitedProvinces() async {
+    if (!mounted) return;
+    setState(() => _isLoadingMap = true);
+    try {
+      final provinces = await _mapService.loadHighlightedProvinces(
+        widget.userId,
+      );
+      if (mounted) {
+        setState(() {
+          _visitedProvinces = provinces;
+        });
+      }
+    } catch (e) {
+      print("Lỗi tải dữ liệu bản đồ (Home): $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingMap = false);
+      }
+    }
+  }
+
   // --- WIDGET COMPONENTS ---
 
   Widget _buildActivityItem(Activity activity) {
@@ -273,7 +303,7 @@ class _HomePageState extends State<HomePage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Travel Plan Đà Lạt của bạn',
+                'Lịch trình du lịch của bạn',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
               GestureDetector(
@@ -651,27 +681,56 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildTravelMapSection() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 4.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Travel Map của bạn',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-              const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.grey),
-            ],
+    // 1. Lấy tổng số tỉnh từ file constants (đã có import ở dòng 19)
+    int totalCount = kAllProvinceIds.length; // (Đây là 34)
+
+    return InkWell(
+      // <-- Bọc bằng InkWell
+      onTap: () {
+        // <-- Thêm sự kiện onTap
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            // Điều hướng sang JourneyMapScreen (đã có import ở dòng 18)
+            builder: (context) => JourneyMapScreen(userId: widget.userId),
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'Đã khám phá 8/64 tỉnh thành tại Việt Nam',
-            style: TextStyle(color: Colors.grey, fontSize: 13),
-          ),
-        ],
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 10.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Journey Map của bạn',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 18,
+                  color: Colors.grey,
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+
+            // 2. HIỂN THỊ TEXT ĐỘNG (THAY VÌ CỨNG)
+            _isLoadingMap
+                ? const Text(
+                    // Hiển thị khi đang tải
+                    'Đang tải dữ liệu bản đồ...',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  )
+                : Text(
+                    // Hiển thị khi đã tải xong
+                    'Đã khám phá ${_visitedProvinces.length}/$totalCount tỉnh thành tại Việt Nam',
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+          ],
+        ),
       ),
     );
   }
@@ -812,25 +871,25 @@ class _HomePageState extends State<HomePage> {
   // --- NAVIGATION LOGIC (Giữ nguyên) ---
 
   Widget _buildBookingContent() => const Center(
-        child: Text(
-          'Đặt chỗ của tôi',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-        ),
-      );
+    child: Text(
+      'Đặt chỗ của tôi',
+      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+    ),
+  );
 
   Widget _buildSavedContent() => const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.bookmark_outline, size: 80, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
-              'Đã lưu',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-            ),
-          ],
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.bookmark_outline, size: 80, color: Colors.grey),
+        SizedBox(height: 16),
+        Text(
+          'Đã lưu',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _getSelectedContent() {
     switch (_selectedIndex) {

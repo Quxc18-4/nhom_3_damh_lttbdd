@@ -32,8 +32,7 @@ class ProfileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<DocumentSnapshot>(
-      future:
-      FirebaseFirestore.instance.collection('users').doc(user.id).get(),
+      future: FirebaseFirestore.instance.collection('users').doc(user.id).get(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(
@@ -108,7 +107,9 @@ class ProfileHeader extends StatelessWidget {
                       child: Text(
                         userName,
                         style: const TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.bold),
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -126,7 +127,9 @@ class ProfileHeader extends StatelessWidget {
                   child: Text(
                     userName,
                     style: const TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.bold),
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               const SizedBox(height: 16),
@@ -151,7 +154,8 @@ class ProfileHeader extends StatelessWidget {
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => CheckinScreen(
-                                      currentUserId: currentUserId),
+                                    currentUserId: currentUserId,
+                                  ),
                                 ),
                               );
                             },
@@ -167,7 +171,8 @@ class ProfileHeader extends StatelessWidget {
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => CheckinScreen(
-                                      currentUserId: currentUserId),
+                                    currentUserId: currentUserId,
+                                  ),
                                 ),
                               );
                             },
@@ -188,9 +193,10 @@ class ProfileHeader extends StatelessWidget {
 
   Widget _buildStat(String value, String label) => Column(
     children: [
-      Text(value,
-          style:
-          const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      Text(
+        value,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
       const SizedBox(height: 4),
       Text(label, style: const TextStyle(color: Colors.grey)),
     ],
