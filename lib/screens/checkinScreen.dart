@@ -9,6 +9,8 @@ import 'package:nhom_3_damh_lttbdd/services/cloudinary_service.dart'; // <<< S�
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart'; // Cần cho hàm tính khoảng cách (tùy chọn)
+import 'package:geocoding/geocoding.dart';
+import 'package:nhom_3_damh_lttbdd/constants/cityExchange.dart'; // <<< Đảm bảo đường dẫn này đúng
 
 // =======================================================
 // DỮ LIỆU ẢO (ĐÃ XÓA)
@@ -290,6 +292,9 @@ class _CheckinScreenState extends State<CheckinScreen> {
             // TODO: Có thể cần cập nhật cả ratingAverage ở đây (cần logic tính toán phức tạp hơn)
           });
 
+      // 5. Cập nhật tỉnh thành đã ghé thăm
+      _updateVisitedProvinceOnCheckin(); // Cập nhật tỉnh thành đã ghé thăm (fire-and-forget)
+
       _showSnackBar('Đăng bài check-in thành công!');
       if (mounted) Navigator.pop(context); // Quay lại màn hình trước
     } catch (e) {
@@ -393,6 +398,71 @@ class _CheckinScreenState extends State<CheckinScreen> {
       setState(() => _hashtags.add(tag));
     } else if (_hashtags.length >= 5) {
       _showSnackBar('Đã đạt tối đa 5 Hashtag.');
+    }
+  }
+
+  // === HÀM MỚI: CẬP NHẬT TỈNH THÀNH ĐÃ GHÉ THĂM ===
+  Future<void> _updateVisitedProvinceOnCheckin() async {
+    // Hàm này được gọi "fire-and-forget" và không nên
+    // ném lỗi ra ngoài để làm gián đoạn _submitReview.
+    try {
+      // 1. Kiểm tra quyền và dịch vụ vị trí
+      bool serviceEnabled;
+      LocationPermission permission;
+
+      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        print("VisitedProvince: Dịch vụ vị trí đã tắt.");
+        return; // Âm thầm thoát
+      }
+
+      permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        print("VisitedProvince: Quyền vị trí bị từ chối.");
+        return; // Âm thầm thoát
+      }
+
+      // 2. Lấy vị trí GPS hiện tại
+      // Dùng độ chính xác medium là đủ để xác định thành phố
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      );
+
+      // 3. Geocode để lấy tên Tỉnh/Thành phố
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (placemarks.isEmpty) {
+        print("VisitedProvince: Không thể geocode vị trí hiện tại.");
+        return; // Âm thầm thoát
+      }
+
+      // 4. Chuẩn hóa ID tỉnh/thành phố
+      String rawCityName = placemarks.first.administrativeArea ?? '';
+      String? provinceId = getMergedProvinceIdFromGeolocator(rawCityName);
+
+      if (provinceId == null) {
+        print("VisitedProvince: Không thể map '$rawCityName' sang ID chuẩn.");
+        return; // Âm thầm thoát
+      }
+
+      // 5. Cập nhật Firestore
+      // (Giả sử collection người dùng là 'users')
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.currentUserId) // Lấy ID người dùng từ widget
+          .update({
+            'visitedProvinces': FieldValue.arrayUnion([provinceId]),
+          });
+
+      print("VisitedProvince: Đã cập nhật thành công: $provinceId");
+    } catch (e) {
+      // Bắt mọi lỗi (GPS, geocoding, firestore) và chỉ in ra log
+      // để không làm người dùng bị lỗi khi đang đăng bài.
+      print("VisitedProvince: Lỗi không xác định: $e");
     }
   }
   // --------------------------------------------------------------------------

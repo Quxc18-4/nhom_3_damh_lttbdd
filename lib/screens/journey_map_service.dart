@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:nhom_3_damh_lttbdd/constants/cityExchange.dart';
 import 'package:collection/collection.dart';
 
 class JourneyMapService {
@@ -55,9 +56,20 @@ class JourneyMapService {
               final String provinceName =
                   location['city'] ?? ''; // Tên đầy đủ từ Firestore
               if (provinceName.isNotEmpty) {
-                provincesToHighlight.add(
-                  _formatProvinceNameToId(provinceName),
-                ); // Chuyển sang ID
+                // Dùng hàm chuẩn hóa toàn cục
+                final String? provinceId = getMergedProvinceIdFromGeolocator(
+                  provinceName,
+                );
+
+                if (provinceId != null) {
+                  // Sẽ thêm "ho_chi_minh", nhưng Set đã có nên bỏ qua
+                  provincesToHighlight.add(provinceId);
+                } else {
+                  // In ra log nếu không thể chuẩn hóa tên tỉnh từ review
+                  print(
+                    "Service Warning: Không thể chuẩn hóa tên tỉnh từ review: $provinceName",
+                  );
+                }
               }
             }
           }
@@ -69,23 +81,5 @@ class JourneyMapService {
       print("Lỗi tải dữ liệu highlight: $e");
       rethrow; // Ném lỗi ra để UI xử lý
     }
-  }
-
-  // === DI CHUYỂN TỪ _formatProvinceNameToId (lines 475-503) ===
-  // (Hàm này là nội bộ của Service)
-  String _formatProvinceNameToId(String name) {
-    String normalized = name.toLowerCase();
-    normalized = normalized.replaceFirst(RegExp(r'^(thành phố|tỉnh)\s'), '');
-    normalized = normalized.replaceAll(RegExp(r'[àáảãạăắằẳẵặâấầẩẫậ]'), 'a');
-    normalized = normalized.replaceAll(RegExp(r'[èéẻẽẹêếềểễệ]'), 'e');
-    normalized = normalized.replaceAll(RegExp(r'[ìíỉĩị]'), 'i');
-    normalized = normalized.replaceAll(RegExp(r'[òóỏõọôốồổỗộơớờởỡợ]'), 'o');
-    normalized = normalized.replaceAll(RegExp(r'[ùúủũụưứừửữự]'), 'u');
-    normalized = normalized.replaceAll(RegExp(r'[ỳýỷỹỵ]'), 'y');
-    normalized = normalized.replaceAll(RegExp(r'[đ]'), 'd');
-    normalized = normalized.replaceAll(RegExp(r'[\s\-\/\(\)]+'), '_');
-    normalized = normalized.replaceAll(RegExp(r'[^a-z0-9_]'), '');
-    normalized = normalized.replaceAll(RegExp(r'^_+|_+$'), '');
-    return normalized;
   }
 }

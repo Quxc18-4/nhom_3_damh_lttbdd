@@ -9,7 +9,7 @@ import 'package:nhom_3_damh_lttbdd/screens/worldMapScreen.dart';
 
 // Imports các file mới
 import 'journey_map_service.dart';
-import 'journey_map_constants.dart';
+import 'package:nhom_3_damh_lttbdd/constants/cityExchange.dart'; // Import file constants
 import 'journey_map_widgets.dart';
 
 class JourneyMapScreen extends StatefulWidget {

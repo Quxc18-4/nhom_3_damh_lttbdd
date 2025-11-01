@@ -9,6 +9,8 @@ import 'package:nhom_3_damh_lttbdd/screens/checkinScreen.dart'; // <<< THÊM DÒ
 import 'package:geocoding/geocoding.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math'; // Cần cho hàm tính toán _findNearbyPlace (nếu dùng lại) và cos
+import 'package:nhom_3_damh_lttbdd/model/category_model.dart'; // <<< Sửa đường dẫn nếu cần
+import 'package:nhom_3_damh_lttbdd/constants/cityExchange.dart'; // <<< Sửa đường dẫn nếu cần
 
 class WorldMapScreen extends StatefulWidget {
   final String userId;
@@ -24,6 +26,17 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
   bool _isLoadingLocation = true;
   LatLng _currentCenter = const LatLng(21.0285, 105.8542); // Mặc định Hà Nội
   LatLng? _longPressedLatLng; // Vị trí marker ĐỎ tạm thời (khi nhấn giữ)
+
+  // === CÁC STATE MỚI CHO TÌM KIẾM VÀ DANH MỤC ===
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+
+  List<CategoryModel> _allCategories = []; // Lưu tất cả danh mục
+  bool _isLoadingCategories = true; // Loading cho danh mục
+  bool _isCategoryBarVisible = false; // Ẩn/hiện thanh danh mục
+  CategoryModel? _selectedCategory; // Danh mục đang được lọc
+
+  List<DocumentSnapshot> _searchResults = []; // Lưu kết quả tìm kiếm
 
   // === State mới cho Places ===
   List<DocumentSnapshot> _fetchedPlaces = []; // Lưu documents từ Firestore
@@ -55,13 +68,65 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
   void initState() {
     super.initState();
     _initializeMapData();
+    // === THÊM CÁC LISTENER NÀY ===
+    // Listener cho thanh tìm kiếm
+    _searchController.addListener(_onSearchChanged);
+    // Listener để ẩn/hiện danh sách kết quả
+    _searchFocusNode.addListener(() {
+      setState(() {
+        // Cập nhật UI khi focus thay đổi (để ẩn/hiện list)
+      });
+    });
+    // ============================
+  }
+
+  // === THÊM HÀM NÀY ===
+  @override
+  void dispose() {
+    _mapController.dispose();
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
   }
 
   // === Gộp các lệnh gọi bất đồng bộ ban đầu ===
   Future<void> _initializeMapData() async {
     // Chạy song song
-    await Future.wait([_determinePosition(), _fetchPlacesFromFirestore()]);
+    await Future.wait([
+      _determinePosition(),
+      _fetchPlacesFromFirestore(),
+      _fetchCategories(), // <<< THÊM HÀM TẢI CATEGORY
+    ]);
     // Không cần setState loading chung ở đây vì mỗi hàm tự quản lý state riêng
+  }
+
+  // === THÊM HÀM MỚI NÀY (Giống addPlaceRequest.dart) ===
+  Future<void> _fetchCategories() async {
+    if (!mounted) return;
+    setState(() => _isLoadingCategories = true);
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('categories')
+          .get();
+      final categories = snapshot.docs
+          .map((doc) => CategoryModel.fromFirestore(doc))
+          .toList();
+      categories.sort((a, b) => a.name.compareTo(b.name));
+
+      if (mounted) {
+        setState(() {
+          _allCategories = categories;
+        });
+      }
+    } catch (e) {
+      print("Lỗi fetch categories: $e");
+      _showSnackBar('Không thể tải danh sách danh mục: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingCategories = false);
+      }
+    }
   }
 
   // === Logic lấy vị trí (Giữ nguyên từ file của bạn) ===
@@ -104,6 +169,7 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
   }
 
   // === Tải Places từ Firestore và Tạo Markers (Giữ nguyên từ file của bạn) ===
+  // === SỬA HÀM NÀY ===
   Future<void> _fetchPlacesFromFirestore() async {
     if (!mounted) return;
     setState(() => _isLoadingPlaces = true);
@@ -111,58 +177,76 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
       QuerySnapshot placesSnapshot = await FirebaseFirestore.instance
           .collection('places')
           .get();
-      _fetchedPlaces = placesSnapshot.docs;
-      List<Marker> markers = [];
-      for (var placeDoc in _fetchedPlaces) {
-        final data = placeDoc.data() as Map<String, dynamic>;
-        final coordinates = data['location']?['coordinates'] as GeoPoint?;
-        // final placeName = data['name'] as String?; // Lấy tên nếu cần tooltip
+      _fetchedPlaces = placesSnapshot.docs; // <<< CHỈ LƯU DATA
 
-        if (coordinates != null) {
-          markers.add(
-            Marker(
-              point: LatLng(coordinates.latitude, coordinates.longitude),
-              width: 35,
-              height: 35,
-              child: GestureDetector(
-                // Bọc để bắt onTap
-                onTap: () => _handlePlaceMarkerTap(
-                  placeDoc,
-                ), // Gọi hàm xử lý tap marker đen
-                child: Tooltip(
-                  // Thêm tooltip
-                  message: data['name'] ?? 'Địa điểm',
-                  child: Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.location_on,
-                      color: Colors.white,
-                      size: 20.0,
-                    ),
+      if (mounted) {
+        setState(() {
+          _isLoadingPlaces = false;
+          _updatePlaceMarkers(); // <<< GỌI HÀM TẠO MARKER
+        });
+      }
+    } catch (e) {
+      print("Lỗi tải địa điểm từ Firestore: $e");
+      if (mounted) {
+        _showSnackBar('Lỗi tải danh sách địa điểm: $e', isError: true);
+        setState(() => _isLoadingPlaces = false);
+      }
+    }
+  }
+
+  // === THÊM HÀM MỚI NÀY (Quan trọng) ===
+  // Hàm này tạo/cập nhật danh sách marker dựa trên bộ lọc
+  void _updatePlaceMarkers() {
+    List<Marker> markers = [];
+
+    // Lọc _fetchedPlaces nếu có _selectedCategory
+    final List<DocumentSnapshot> placesToBuild = _selectedCategory == null
+        ? _fetchedPlaces // Không lọc, hiển thị tất cả
+        : _fetchedPlaces.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final categoryIds = data['categories'] as List<dynamic>? ?? [];
+            return categoryIds.contains(_selectedCategory!.id);
+          }).toList();
+
+    // Tạo marker từ danh sách đã lọc
+    for (var placeDoc in placesToBuild) {
+      final data = placeDoc.data() as Map<String, dynamic>;
+      final coordinates = data['location']?['coordinates'] as GeoPoint?;
+      final placeName = data['name'] as String? ?? 'Địa điểm';
+
+      if (coordinates != null) {
+        markers.add(
+          Marker(
+            point: LatLng(coordinates.latitude, coordinates.longitude),
+            width: 35,
+            height: 35,
+            child: GestureDetector(
+              onTap: () => _handlePlaceMarkerTap(placeDoc),
+              child: Tooltip(
+                message: placeName,
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.location_on,
+                    color: Colors.white,
+                    size: 20.0,
                   ),
                 ),
               ),
             ),
-          );
-        }
-      }
-      if (mounted)
-        setState(() {
-          _placeMarkers = markers;
-          _isLoadingPlaces = false;
-        });
-    } catch (e) {
-      print("Lỗi tải địa điểm từ Firestore: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi tải danh sách địa điểm: $e')),
+          ),
         );
-        setState(() => _isLoadingPlaces = false);
       }
+    }
+
+    if (mounted) {
+      setState(() {
+        _placeMarkers = markers;
+      });
     }
   }
 
@@ -212,6 +296,325 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
       if (distance < thresholdDistance) return true;
     }
     return false;
+  }
+
+  // === THÊM CÁC HÀM MỚI NÀY ===
+
+  // Được gọi mỗi khi nội dung thanh tìm kiếm thay đổi
+  void _onSearchChanged() {
+    if (_searchController.text.isEmpty) {
+      setState(() {
+        _searchResults = [];
+      });
+    } else {
+      _performSearch(_searchController.text);
+    }
+  }
+
+  // Hàm thực hiện tìm kiếm
+  void _performSearch(String query) {
+    if (query.isEmpty) {
+      setState(() => _searchResults = []);
+      return;
+    }
+
+    final String lowerCaseQuery = query.toLowerCase();
+
+    // Tìm trên danh sách địa điểm đã tải
+    final results = _fetchedPlaces.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      final name = data['name'] as String? ?? '';
+      return name.toLowerCase().contains(lowerCaseQuery);
+    }).toList();
+
+    setState(() {
+      // Giới hạn 5 kết quả
+      _searchResults = results.take(5).toList();
+    });
+  }
+
+  // Hàm xử lý khi bấm vào 1 kết quả tìm kiếm
+  void _onSearchResultTap(DocumentSnapshot placeDoc) {
+    _searchController.clear(); // Xóa text
+    _searchFocusNode.unfocus(); // Bỏ focus
+    setState(() {
+      _searchResults = [];
+    });
+
+    // Dùng lại hàm _handlePlaceMarkerTap để mở bottom sheet
+    _handlePlaceMarkerTap(placeDoc);
+  }
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isError ? Colors.redAccent : null,
+        ),
+      );
+    }
+  }
+
+  // === THÊM CÁC HÀM WIDGET MỚI NÀY ===
+
+  // Widget chính cho LỚP 3
+  Widget _buildSearchAndFilterUI() {
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 10,
+      left: 15,
+      right: 15,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // === Hàng 1: Thanh tìm kiếm ===
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(30),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                // Nút 3 gạch (Category)
+                IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed: () {
+                    setState(() {
+                      _isCategoryBarVisible = !_isCategoryBarVisible;
+                    });
+                  },
+                  color: Colors.grey[700],
+                ),
+                // Thanh search
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    decoration: InputDecoration(
+                      hintText: 'Tìm kiếm',
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 15),
+                    ),
+                  ),
+                ),
+                // Nút Xóa (nếu đang gõ)
+                if (_searchController.text.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.grey),
+                    onPressed: () {
+                      _searchController.clear();
+                    },
+                  ),
+              ],
+            ),
+          ),
+
+          // === Hàng 2: Thanh danh mục (ẩn/hiện) ===
+          _buildCategoryBar(),
+        ],
+      ),
+    );
+  }
+
+  // Widget cho thanh danh mục (Hàng 2)
+  Widget _buildCategoryBar() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      height: _isCategoryBarVisible ? 50 : 0, // << Animates height
+      margin: const EdgeInsets.only(top: 8),
+      // XÓA BỎ OverflowBox, thay bằng ClipRRect
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(25), // Bo góc cho chính thanh cuộn
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          // Thêm padding dọc để các chip không bị sát viền trên/dưới
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              // Nút "Tất cả" (để xóa filter)
+              Padding(
+                // Thêm padding trái để nó không bị dính vào nút 3 gạch
+                padding: const EdgeInsets.only(right: 8.0, left: 2.0),
+                child: ActionChip(
+                  label: const Text('Tất cả'),
+                  backgroundColor: _selectedCategory == null
+                      ? Colors.orange.shade200
+                      : Colors.white,
+                  onPressed: () {
+                    setState(() {
+                      _selectedCategory = null;
+                      _updatePlaceMarkers(); // Cập nhật lại map
+                    });
+                  },
+                  // === THÊM SHAPE ĐỂ BO TRÒN ===
+                  shape: StadiumBorder(
+                    side: BorderSide(color: Colors.grey[300]!),
+                  ),
+                ),
+              ),
+
+              // Render tối đa 10 danh mục
+              ..._allCategories.take(10).map((category) {
+                final bool isSelected = _selectedCategory?.id == category.id;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: ActionChip(
+                    label: Text(category.name),
+                    // avatar: Icon(Icons.restaurant), // Ví dụ
+                    backgroundColor: isSelected
+                        ? Colors.orange.shade200
+                        : Colors.white,
+                    onPressed: () {
+                      setState(() {
+                        _selectedCategory = category;
+                        _updatePlaceMarkers(); // Cập nhật lại map
+                      });
+                    },
+                    // === THÊM SHAPE ĐỂ BO TRÒN ===
+                    shape: StadiumBorder(
+                      side: BorderSide(color: Colors.grey[300]!),
+                    ),
+                  ),
+                );
+              }),
+
+              // Nút "Dấu cộng" nếu có > 10 danh mục
+              if (_allCategories.length > 10)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: ActionChip(
+                    label: const Icon(Icons.add, size: 18),
+                    backgroundColor: Colors.white,
+                    onPressed: _showAllCategoriesBottomSheet,
+                    // === THÊM SHAPE ĐỂ BO TRÒN ===
+                    shape: StadiumBorder(
+                      side: BorderSide(color: Colors.grey[300]!),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Widget cho LỚP 4: Danh sách kết quả
+  Widget _buildSearchResultsList() {
+    // Chỉ hiện khi có focus VÀ có kết quả
+    if (!_searchFocusNode.hasFocus || _searchResults.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // Vị trí của thanh tìm kiếm
+    final double searchBarHeight =
+        60 + (MediaQuery.of(context).padding.top + 10);
+
+    return Positioned(
+      top: searchBarHeight, // Ngay dưới thanh tìm kiếm
+      left: 20,
+      right: 20,
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.4,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: _searchResults.length,
+            itemBuilder: (context, index) {
+              final doc = _searchResults[index];
+              final data = doc.data() as Map<String, dynamic>;
+              final name = data['name'] ?? 'Không có tên';
+              final address =
+                  data['location']?['fullAddress'] ?? 'Không có địa chỉ';
+
+              return ListTile(
+                // Giống ảnh 2: Icon location
+                leading: Icon(Icons.location_pin, color: Colors.grey[600]),
+                // Dữ liệu: Tên - Địa chỉ
+                title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(
+                  address,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () {
+                  _onSearchResultTap(doc);
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  // === THÊM HÀM MỚI NÀY (cho nút +) ===
+  void _showAllCategoriesBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.5,
+          maxChildSize: 0.8,
+          builder: (context, scrollController) {
+            return Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Text(
+                    'Tất cả danh mục',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scrollController,
+                      itemCount: _allCategories.length,
+                      itemBuilder: (context, index) {
+                        final category = _allCategories[index];
+                        final bool isSelected =
+                            _selectedCategory?.id == category.id;
+                        return ListTile(
+                          title: Text(category.name),
+                          trailing: isSelected
+                              ? Icon(Icons.check, color: Colors.orange)
+                              : null,
+                          onTap: () {
+                            setState(() {
+                              _selectedCategory = category;
+                              _updatePlaceMarkers(); // Cập nhật map
+                            });
+                            Navigator.pop(context); // Đóng bottom sheet
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   // --- HÀM HELPER ĐỂ VẼ 1 ẢNH (TỪ exploreScreen) ---
@@ -456,7 +859,8 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
     bool showOverallLoading = _isLoadingLocation || _isLoadingPlaces;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Bản đồ thế giới (OSM)')),
+      // Bỏ AppBar cũ
+      // appBar: AppBar(title: const Text('Bản đồ thế giới (OSM)')),
       body: Stack(
         // Stack chính cho các lớp
         children: [
@@ -466,6 +870,12 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
               : _buildMapLayer(), // Đã tách riêng lớp bản đồ
           // --- Lớp 2: Overlay Mờ (Khi có Marker đỏ) ---
           if (_longPressedLatLng != null) _buildBlurOverlay(),
+
+          // --- LỚP 3: UI TÌM KIẾM VÀ DANH MỤC (MỚI) ---
+          _buildSearchAndFilterUI(),
+
+          // --- LỚP 4: DANH SÁCH KẾT QUẢ TÌM KIẾM (MỚI) ---
+          _buildSearchResultsList(),
         ],
       ),
     );
@@ -582,14 +992,22 @@ class _WorldMapScreenState extends State<WorldMapScreen> {
         );
         if (placemarks.isNotEmpty) {
           final Placemark p = placemarks.first;
-          String street = p.thoroughfare ?? '';
-          String city =
-              p.administrativeArea
-                  ?.replaceFirst('Thành phố ', '')
-                  .replaceFirst('Tỉnh ', '') ??
-              '';
-          if (street.isNotEmpty && city.isNotEmpty) return '$street, $city';
-          if (city.isNotEmpty) return city;
+          String street = p.thoroughfare ?? 'Không xác định';
+
+          // === LOGIC CHUẨN HÓA THÀNH PHỐ MỚI ===
+          String rawCityName = p.administrativeArea ?? '';
+          String? mergedId = getMergedProvinceIdFromGeolocator(rawCityName);
+          String city = "Không xác định"; // Default
+
+          if (mergedId != null) {
+            city = formatProvinceIdToName(mergedId);
+          }
+          // ===================================
+
+          if (street != 'Không xác định' && city != 'Không xác định')
+            return '$street, $city';
+          if (city != 'Không xác định') return city;
+          if (street != 'Không xác định') return street;
         }
       } catch (e) {
         print("Lỗi geocoding cho bottom sheet title: $e");
