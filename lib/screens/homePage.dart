@@ -8,7 +8,7 @@ import 'package:nhom_3_damh_lttbdd/screens/saveScreen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'dart:async';
+import 'dart:async'; 
 
 // Import Model và Screens mới/cần thiết
 import 'package:nhom_3_damh_lttbdd/model/activity.dart';
@@ -92,7 +92,7 @@ class _HomePageState extends State<HomePage> {
     _loadUserData();
     _loadActiveBanners();
     _setupNotificationListener();
-    _loadVisitedProvinces();
+    _loadVisitedProvinces(); // Giữ lại hàm này
   }
 
   @override
@@ -137,7 +137,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  // --- LOAD DATA FUNCTIONS (Giữ nguyên) ---
+  // --- LOAD DATA FUNCTIONS ---
 
   Future<void> _loadStartDate() async {
     final savedDate = await _localPlanService.loadStartDate();
@@ -447,157 +447,57 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildCustomHeader() {
-    String greeting;
-    final hour = DateTime.now().hour;
-    if (hour < 12) {
-      greeting = 'Chào buổi sáng';
-    } else if (hour < 18) {
-      greeting = 'Chào buổi chiều';
-    } else {
-      greeting = 'Chào buổi tối';
-    }
+  // ✅ WIDGET JOURNEY MAP ĐÃ MERGE VÀ SỬ DỤNG LOGIC ĐỘNG
+  Widget _buildTravelMapSection() {
+    // 1. Lấy tổng số tỉnh
+    int totalCount = kAllProvinceIds.length; 
 
-    final today = DateTime.now();
-    // Đảm bảo locale 'vi_VN' đã được khởi tạo trong main.dart
-    final dayOfWeek = DateFormat('EEEE', 'vi_VN').format(today);
-    final formattedDate = DateFormat('dd MMMM yyyy', 'vi_VN').format(today);
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFFFE0B2),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-      ),
-      padding: const EdgeInsets.fromLTRB(16, 50, 16, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.calendar_month, size: 20, color: Colors.black54),
-              const SizedBox(width: 8),
-              Text(
-                '${dayOfWeek}, ${formattedDate.replaceAll(',', '')}',
-                style: TextStyle(color: Colors.grey[700], fontSize: 14),
-              ),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(
-                  Icons.qr_code_scanner_outlined,
-                  color: Colors.black,
-                ),
-                onPressed: () {},
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              ),
-
-              // NÚT THÔNG BÁO VỚI HUY HIỆU
-              Stack(
-                children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.notifications_none,
-                      color: Colors.black,
-                    ),
-                    onPressed: _navigateToNotifications, // Điều hướng
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 32,
-                      minHeight: 32,
-                    ),
-                  ),
-                  if (_unreadNotificationCount > 0)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.white, width: 1.5),
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 14,
-                          minHeight: 14,
-                        ),
-                        child: Text(
-                          _unreadNotificationCount.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
+    return InkWell(
+      onTap: () {
+        // Điều hướng sang JourneyMapScreen
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => JourneyMapScreen(userId: widget.userId),
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              ClipOval(
-                child: Image.asset(
-                  _ASSET_AVATAR,
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const CircleAvatar(radius: 20, child: Icon(Icons.person)),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                '$greeting, ${_userNickname.isNotEmpty ? _userNickname : "Mydei"}!',
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFFF9800),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            decoration: InputDecoration(
-              hintText: 'Tìm kiếm...',
-              prefixIcon: const Icon(Icons.search, color: Colors.grey),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(
-                vertical: 0,
-                horizontal: 16,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
+        ).then((_) {
+          // Tải lại dữ liệu map khi quay về
+          _loadVisitedProvinces(); 
+        });
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 10.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildSuggestionChip('Hotel Đà Lạt', const Color(0xFFFFCC80)),
-                _buildSuggestionChip(
-                  'Thuê xe tại Huế',
-                  const Color(0xFFB3E5FC),
+                const Text(
+                  'Journey Map của bạn',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                 ),
-                _buildSuggestionChip(
-                  'Vé máy bay giá rẻ',
-                  const Color(0xFFFFAB91),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 18,
+                  color: Colors.grey,
                 ),
-                _buildSuggestionChip('Tour Đà Lạt', const Color(0xFFC5E1A5)),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+
+            // HIỂN THỊ TEXT ĐỘNG
+            _isLoadingMap
+                ? const Text(
+                    'Đang tải dữ liệu bản đồ...',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  )
+                : Text(
+                    'Đã khám phá ${_visitedProvinces.length}/$totalCount tỉnh thành tại Việt Nam',
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+          ],
+        ),
       ),
     );
   }
@@ -677,61 +577,6 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildTravelMapSection() {
-    // 1. Lấy tổng số tỉnh từ file constants (đã có import ở dòng 19)
-    int totalCount = kAllProvinceIds.length; // (Đây là 34)
-
-    return InkWell(
-      // <-- Bọc bằng InkWell
-      onTap: () {
-        // <-- Thêm sự kiện onTap
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            // Điều hướng sang JourneyMapScreen (đã có import ở dòng 18)
-            builder: (context) => JourneyMapScreen(userId: widget.userId),
-          ),
-        );
-      },
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 10.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Journey Map của bạn',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-                const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 18,
-                  color: Colors.grey,
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-
-            // 2. HIỂN THỊ TEXT ĐỘNG (THAY VÌ CỨNG)
-            _isLoadingMap
-                ? const Text(
-                    // Hiển thị khi đang tải
-                    'Đang tải dữ liệu bản đồ...',
-                    style: TextStyle(color: Colors.grey, fontSize: 13),
-                  )
-                : Text(
-                    // Hiển thị khi đã tải xong
-                    'Đã khám phá ${_visitedProvinces.length}/$totalCount tỉnh thành tại Việt Nam',
-                    style: const TextStyle(color: Colors.grey, fontSize: 13),
-                  ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -868,28 +713,28 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- NAVIGATION LOGIC (Giữ nguyên) ---
+  // --- NAVIGATION LOGIC ---
 
   Widget _buildBookingContent() => const Center(
-    child: Text(
-      'Đặt chỗ của tôi',
-      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-    ),
-  );
-
-  Widget _buildSavedContent() => const Center(
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(Icons.bookmark_outline, size: 80, color: Colors.grey),
-        SizedBox(height: 16),
-        Text(
-          'Đã lưu',
+        child: Text(
+          'Đặt chỗ của tôi',
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
         ),
-      ],
-    ),
-  );
+      );
+
+  Widget _buildSavedContent() => const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.bookmark_outline, size: 80, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'Đã lưu',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      );
 
   Widget _getSelectedContent() {
     switch (_selectedIndex) {
