@@ -1,16 +1,16 @@
-// File: journeyMapScreen.dart (ĐÃ DỌN DẸP)
+// File: screens/journey_map/journeyMapScreen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Vẫn cần cho hàm init service
-import 'package:collection/collection.dart'; // Vẫn cần cho hàm init service
-import 'package:nhom_3_damh_lttbdd/screens/worldMapScreen.dart';
 
-// Imports các file mới
-import 'journey_map_service.dart';
-import 'package:nhom_3_damh_lttbdd/constants/cityExchange.dart'; // Import file constants
-import 'journey_map_widgets.dart';
+import 'package:nhom_3_damh_lttbdd/screens/world_map/worldMapScreen.dart';
+
+// Imports các file mới với đường dẫn đã cập nhật
+import 'service/journey_map_service.dart';
+import 'package:nhom_3_damh_lttbdd/constants/cityExchange.dart';
+import 'widget/journey_map_widgets.dart';
+import 'helper/svg_color_helper.dart'; // <-- IMPORT FILE HELPER MỚI
 
 class JourneyMapScreen extends StatefulWidget {
   final String userId;
@@ -29,10 +29,6 @@ class _JourneyMapScreenState extends State<JourneyMapScreen> {
   String? _originalSvgContent;
   String? _modifiedSvgContent;
 
-  // === DỮ LIỆU CỨNG (ĐÃ XÓA VÀ CHUYỂN SANG constants.dart) ===
-  // final List<String> allProvincesId = [ ... ]; // ĐÃ DI CHUYỂN
-  // final Map<String, String> _provinceDisplayNames = { ... }; // ĐÃ DI CHUYỂN
-
   @override
   void initState() {
     super.initState();
@@ -45,7 +41,6 @@ class _JourneyMapScreenState extends State<JourneyMapScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        // Điều hướng sang màn hình mới và truyền userId
         builder: (context) => WorldMapScreen(userId: widget.userId),
       ),
     );
@@ -77,8 +72,9 @@ class _JourneyMapScreenState extends State<JourneyMapScreen> {
         widget.userId,
       );
 
-      // 3. Tô màu SVG (dùng hàm _colorSvgPaths ở dưới)
-      _modifiedSvgContent = _colorSvgPaths(
+      // 3. Tô màu SVG (dùng hàm từ helper)
+      _modifiedSvgContent = colorSvgPaths(
+        // <-- SỬ DỤNG HÀM TỪ HELPER
         _originalSvgContent!,
         highlightedProvinces,
       );
@@ -97,30 +93,10 @@ class _JourneyMapScreenState extends State<JourneyMapScreen> {
     }
   }
 
-  // === HÀM TẢI DỮ LIỆU (ĐÃ XÓA VÀ CHUYỂN SANG service.dart) ===
-  // Future<void> _loadHighlightData() async { ... } // ĐÃ DI CHUYỂN
+  // === HÀM TÔ MÀU (ĐÃ XÓA VÀ CHUYỂN SANG helper/svg_color_helper.dart) ===
+  // String _colorSvgPaths(...) { ... } // <-- ĐÃ DI CHUYỂN
 
-  // === HÀM TÔ MÀU (GIỮ LẠI) ===
-  // (Giữ nguyên hàm này từ code của bạn, line 218)
-  String _colorSvgPaths(String svgContent, Set<String> provinceIdsToColor) {
-    String coloredSvg = svgContent;
-    const String fillColor = "#ede31c"; // Giữ nguyên màu vàng của bạn
-    const double fillOpacity = 0.8;
-
-    for (String provinceId in provinceIdsToColor) {
-      final pattern = RegExp('(<path[^>]*id="$provinceId"[^>]*?)(/?>)');
-      coloredSvg = coloredSvg.replaceFirstMapped(pattern, (match) {
-        String pathTag = match.group(1)!;
-        String closing = match.group(2)!;
-        pathTag = pathTag.replaceAll(RegExp(r'\sfill="[^"]*"'), '');
-        pathTag = pathTag.replaceAll(RegExp(r'\sstyle="[^"]*"'), '');
-        return '$pathTag fill="$fillColor" fill-opacity="$fillOpacity" $closing';
-      });
-    }
-    return coloredSvg;
-  }
-
-  // === HÀM BUILD GIAO DIỆN (ĐÃ DỌN DẸP) ===
+  // === HÀM BUILD GIAO DIỆN (GIỮ NGUYÊN) ===
   @override
   Widget build(BuildContext context) {
     int visitedCount = highlightedProvinces.length;
@@ -150,14 +126,14 @@ class _JourneyMapScreenState extends State<JourneyMapScreen> {
         onShowDetails: _showVisitedDetailsModal,
         onOpenOsm: _navigateToOSM,
         onSaveLocation: _savePrivateLocation,
-        onPostReview: _postReview, // <-- Thêm hàm này
+        onPostReview: _postReview,
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Stack(
               fit: StackFit.expand,
               children: [
-                // 1. Lớp nền (Giữ nguyên từ code của bạn, line 406)
+                // 1. Lớp nền
                 Image.asset(
                   'assets/images/map_background.jpg',
                   fit: BoxFit.cover,
@@ -177,14 +153,7 @@ class _JourneyMapScreenState extends State<JourneyMapScreen> {
     );
   }
 
-  // === CÁC HÀM HELPER (ĐÃ XÓA HOẶC GIỮ LẠI) ===
-
-  // _formatProvinceNameToId (ĐÃ DI CHUYỂN SANG service.dart)
-  // _formatProvinceIdToDisplayName (ĐÃ DI CHUYỂN SANG constants.dart)
-  // _buildProvinceGrid (ĐÃ DI CHUYỂN SANG widgets.dart)
-
-  // === HÀM HIỂN THỊ MODAL (GIỮ LẠI) ===
-  // (Giữ nguyên từ code của bạn, line 551, chỉ thay đổi builder)
+  // === HÀM HIỂN THỊ MODAL (GIỮ NGUYÊN) ===
   void _showVisitedDetailsModal() {
     showModalBottomSheet(
       context: context,

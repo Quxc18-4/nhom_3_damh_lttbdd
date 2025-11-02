@@ -247,6 +247,7 @@ final Map<String, String> _kOldProvinceNameToNewId = {
   "ba ria vung tau": "ho_chi_minh",
   "tinh ba ria vung tau": "ho_chi_minh", // <<< ĐÂY LÀ FIX
   "vung tau": "ho_chi_minh",
+  "tp ho chi minh": "ho_chi_minh",
 
   // Đồng Nai (Đồng Nai, Bình Phước)
   "dong nai": "dong_nai",
