@@ -6,7 +6,8 @@ import 'package:flutter_facebook_auth/flutter_facebook_auth.dart'; // ✅ Cần 
 import 'package:google_sign_in/google_sign_in.dart'; // ✅ Cần cho Google Sign-In
 
 // Đảm bảo các import này là chính xác
-import 'package:nhom_3_damh_lttbdd/screens/homePage.dart';
+
+import 'package:nhom_3_damh_lttbdd/screens/home/homePage.dart';
 import 'package:nhom_3_damh_lttbdd/screens/registerScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/forgotPasswordScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/adminDashboardRequestView.dart';
@@ -139,8 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _showLoading();
     try {
       // 1. Thực hiện Đăng nhập bằng Facebook
-      final LoginResult result = await FacebookAuth.instance.login(
-      );
+      final LoginResult result = await FacebookAuth.instance.login();
 
       if (result.status == LoginStatus.success) {
         final accessToken = result.accessToken!.token;

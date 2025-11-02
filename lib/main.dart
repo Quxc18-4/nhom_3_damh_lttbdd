@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nhom_3_damh_lttbdd/screens/splashScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/home/homePage.dart';
 import 'package:nhom_3_damh_lttbdd/screens/welcomeScreen.dart';
-import 'package:nhom_3_damh_lttbdd/screens/homePage.dart';
 import 'package:nhom_3_damh_lttbdd/screens/loginScreen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/date_symbol_data_local.dart';
