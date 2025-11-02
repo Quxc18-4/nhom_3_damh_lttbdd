@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:convex_bottom_bar/convex_bottom_bar.dart';
+import 'package:nhom_3_damh_lttbdd/screens/explore_screen/explore_screen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/notification_screen/notification_screen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/profileScreen.dart';
-import 'package:nhom_3_damh_lttbdd/screens/exploreScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/journey_map/service/journey_map_service.dart';
 import 'tripPlannerScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/save_screen/saved_screen.dart';
@@ -18,7 +19,6 @@ import 'package:nhom_3_damh_lttbdd/screens/journey_map/journeyMapScreen.dart';
 // Dùng để lấy tổng số tỉnh (kAllProvinceIds)
 import 'package:nhom_3_damh_lttbdd/constants/cityExchange.dart';
 import 'bannerDetailScreen.dart';
-import 'notificationScreen.dart';
 
 // Giả định các đường dẫn assets (GIỮ NGUYÊN)
 const String _ASSET_AVATAR = 'assets/images/image 8.png';

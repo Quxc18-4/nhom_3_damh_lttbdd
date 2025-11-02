@@ -1,22 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
-// Lưu ý: Đảm bảo các đường dẫn import này là chính xác trong dự án của bạn
-import 'package:nhom_3_damh_lttbdd/screens/albumTabContent.dart';
-import 'package:nhom_3_damh_lttbdd/screens/introductionTabContent.dart';
-import 'package:nhom_3_damh_lttbdd/screens/followingTabContent.dart';
-
-// 🧩 Các widget con đã tách sẵn
-import 'widget/profile_header.dart';
-import 'widget/sliver_tab_header.dart';
-import 'widget/timeline_post_card.dart';
+import 'package:nhom_3_damh_lttbdd/screens/personal_profile/album_tab_content.dart';
+import 'package:nhom_3_damh_lttbdd/screens/personal_profile/following_tab_content.dart';
+import 'package:nhom_3_damh_lttbdd/screens/personal_profile/introduction_tab.dart';
+import 'package:nhom_3_damh_lttbdd/screens/personal_profile/service/profile_service.dart';
+import 'package:nhom_3_damh_lttbdd/screens/personal_profile/widgets/personal_profile/profile_header.dart';
+import 'package:nhom_3_damh_lttbdd/screens/personal_profile/widgets/personal_profile/sliver_tab_header.dart';
+import 'package:nhom_3_damh_lttbdd/screens/personal_profile/widgets/personal_profile/timeline_post_card.dart';
 
 class PersonalProfileScreen extends StatefulWidget {
   final String userId;
-
-  const PersonalProfileScreen({Key? key, required this.userId})
-    : super(key: key);
+  const PersonalProfileScreen({super.key, required this.userId});
 
   @override
   State<PersonalProfileScreen> createState() => _PersonalProfileScreenState();
@@ -25,20 +20,22 @@ class PersonalProfileScreen extends StatefulWidget {
 class _PersonalProfileScreenState extends State<PersonalProfileScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final ProfileService _profileService = ProfileService(); // ✅ Dùng service
+
   User _currentUser = User.empty();
-  // ✅ SỬA LỖI 1: Thêm biến để lưu dữ liệu thô (raw user data) cho IntroductionTabContent
   Map<String, dynamic>? _rawUserData;
-
   List<Post> _myPosts = [];
-  bool _isLoading = true;
 
+  bool _isLoading = true;
   bool _isMyProfile = false;
   bool _isFollowing = false;
   bool _isFollowLoading = false;
+
   int _followersCount = 0;
   int _followingCount = 0;
   String? _currentAuthUserId;
 
+  // ignore: unused_element
   bool get _isAuthenticated => auth.FirebaseAuth.instance.currentUser != null;
 
   @override
@@ -55,101 +52,45 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
   }
 
   // ===============================================================
-  // 🔹 FETCH PROFILE DATA
+  // 🔹 LOAD DỮ LIỆU PROFILE
   // ===============================================================
   Future<void> _loadProfileData() async {
-    if (!mounted) return;
-
     setState(() => _isLoading = true);
-
     _currentAuthUserId = auth.FirebaseAuth.instance.currentUser?.uid;
     _isMyProfile = (_currentAuthUserId == widget.userId);
 
     try {
-      // 1️⃣ Lấy dữ liệu user
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .get();
-
-      if (userDoc.exists) {
-        _currentUser = User.fromDoc(userDoc);
-        final data = userDoc.data() as Map<String, dynamic>? ?? {};
-
-        // ✅  Lưu dữ liệu thô (Map) vào biến state mới
-        _rawUserData = data;
-
-        int followers = data['followersCount'] ?? 0;
-        int following = data['followingCount'] ?? 0;
-
-        setState(() {
-          _followersCount = followers;
-          _followingCount = following;
-        });
+      // 1️⃣ Lấy thông tin user
+      final userData = await _profileService.getUserData(widget.userId);
+      if (userData != null) {
+        _rawUserData = userData;
+        _currentUser = User.fromMap(userData, id: widget.userId);
+        _followersCount = userData['followersCount'] ?? 0;
+        _followingCount = userData['followingCount'] ?? 0;
       }
 
       // 2️⃣ Lấy bài viết
-      await _fetchMyPosts();
+      _myPosts = await _profileService.getUserPosts(
+        widget.userId,
+        postAuthor: _currentUser,
+      );
 
       // 3️⃣ Kiểm tra follow status nếu không phải hồ sơ của mình
-      if (!_isMyProfile) await _fetchFollowStatus();
+      if (!_isMyProfile && _currentAuthUserId != null) {
+        _isFollowing = await _profileService.isFollowing(
+          _currentAuthUserId!,
+          widget.userId,
+        );
+      }
     } catch (e) {
-      print("❌ Lỗi tải dữ liệu Profile: $e");
+      print("❌ Lỗi load profile: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _fetchMyPosts() async {
-    try {
-      QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('reviews')
-          .where('userId', isEqualTo: widget.userId)
-          .orderBy('createdAt', descending: true)
-          .get();
-
-      List<Post> posts = [];
-      final postAuthor = _currentUser.id.isNotEmpty
-          ? _currentUser
-          : User.empty();
-
-      for (var doc in snapshot.docs) {
-        bool isLiked = false;
-        if (_currentAuthUserId != null) {
-          final likeDoc = await FirebaseFirestore.instance
-              .collection('reviews')
-              .doc(doc.id)
-              .collection('likes')
-              .doc(_currentAuthUserId)
-              .get();
-          isLiked = likeDoc.exists;
-        }
-        posts.add(Post.fromDoc(doc, postAuthor, isLiked: isLiked));
-      }
-
-      if (mounted) setState(() => _myPosts = posts);
-    } catch (e) {
-      print("❌ Lỗi tải bài viết: $e");
-    }
-  }
-
-  Future<void> _fetchFollowStatus() async {
-    if (!_isAuthenticated || _currentAuthUserId == null) return;
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_currentAuthUserId)
-          .collection('following')
-          .doc(widget.userId)
-          .get();
-      if (mounted) setState(() => _isFollowing = doc.exists);
-    } catch (e) {
-      print("❌ Lỗi tải follow status: $e");
-    }
-  }
-
   // ===============================================================
-  // 🔹 FOLLOW/UNFOLLOW
+  // 🔹 FOLLOW / UNFOLLOW
   // ===============================================================
   Future<void> _toggleFollow() async {
     if (_currentAuthUserId == null) {
@@ -160,50 +101,20 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
       );
       return;
     }
-
     if (_isFollowLoading || _isMyProfile) return;
+
     setState(() => _isFollowLoading = true);
 
-    final myFollowing = FirebaseFirestore.instance
-        .collection('users')
-        .doc(_currentAuthUserId)
-        .collection('following')
-        .doc(widget.userId);
-
-    final theirFollowers = FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.userId)
-        .collection('followers')
-        .doc(_currentAuthUserId);
-
-    final myDoc = FirebaseFirestore.instance
-        .collection('users')
-        .doc(_currentAuthUserId);
-    final theirDoc = FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.userId);
-
     try {
-      if (_isFollowing) {
-        await myFollowing.delete();
-        await theirFollowers.delete();
-        await myDoc.update({'followingCount': FieldValue.increment(-1)});
-        await theirDoc.update({'followersCount': FieldValue.increment(-1)});
-        setState(() {
-          _isFollowing = false;
-          _followersCount--;
-        });
-      } else {
-        final timestamp = FieldValue.serverTimestamp();
-        await myFollowing.set({'followedAt': timestamp});
-        await theirFollowers.set({'followedAt': timestamp});
-        await myDoc.update({'followingCount': FieldValue.increment(1)});
-        await theirDoc.update({'followersCount': FieldValue.increment(1)});
-        setState(() {
-          _isFollowing = true;
-          _followersCount++;
-        });
-      }
+      final newStatus = await _profileService.toggleFollow(
+        currentUserId: _currentAuthUserId!,
+        targetUserId: widget.userId,
+        isFollowing: _isFollowing,
+      );
+      setState(() {
+        _isFollowing = newStatus;
+        _followersCount += newStatus ? 1 : -1;
+      });
     } catch (e) {
       print("❌ Lỗi toggle follow: $e");
     } finally {
@@ -236,7 +147,6 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
               followingCount: _followingCount,
               postCount: _myPosts.length,
               onFollowToggle: _toggleFollow,
-              // Giữ lại tham số nếu có trong ProfileHeader của bạn
               currentUserId: widget.userId,
             ),
           ),
@@ -249,18 +159,13 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
           controller: _tabController,
           children: [
             _buildTimeline(),
-
-            // ✅ SỬA LỖI 3: Truyền biến _rawUserData đã sửa lỗi 'undefined_method'
             IntroductionTabContent(
               userData: _rawUserData,
               userPosts: _myPosts,
               isMyProfile: _isMyProfile,
               userId: widget.userId,
             ),
-
             AlbumTabContent(userId: widget.userId),
-
-            // ✅ SỬA LỖI 4: Truyền các tham số bắt buộc cho FollowingTabContent
             FollowingTabContent(
               userId: widget.userId,
               currentAuthUserId: _currentAuthUserId,
@@ -273,7 +178,7 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
   }
 
   // ===============================================================
-  // 🔹 TIMELINE TAB
+  // 🔹 DANH SÁCH BÀI VIẾT
   // ===============================================================
   Widget _buildTimeline() {
     if (_myPosts.isEmpty) {
@@ -292,7 +197,8 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
         return TimelinePostCard(
           post: _myPosts[i],
           currentAuthUserId: _currentAuthUserId,
-          onPostUpdated: _fetchMyPosts,
+          onPostUpdated:
+              _loadProfileData, // Gọi lại toàn bộ dữ liệu khi cập nhật
         );
       },
     );

@@ -26,7 +26,24 @@ class User {
       avatarUrl: data['avatarUrl'] ?? 'assets/images/default_avatar.png',
     );
   }
+
+  /// ✅ Thêm hàm này để khắc phục lỗi `undefined_method`
+  factory User.fromMap(Map<String, dynamic> data, {String? id}) {
+    return User(
+      id: id ?? data['id'] ?? '',
+      name: data['name'] ?? data['fullName'] ?? 'Người dùng',
+      avatarUrl: data['avatarUrl'] ?? 'assets/images/default_avatar.png',
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {'id': id, 'name': name, 'avatarUrl': avatarUrl};
+  }
 }
+
+// ===================================================================
+// 2. POST MODEL
+// ===================================================================
 
 class Post {
   final String id;
