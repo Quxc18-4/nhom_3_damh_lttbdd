@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:nhom_3_damh_lttbdd/screens/post_detail/post_detail_screen.dart';
 
 // Model lưu thông tin từng item đã lưu
 import '/model/saved_models.dart';
@@ -14,7 +15,8 @@ import 'package:nhom_3_damh_lttbdd/screens/save_screen/widgets/all_saved_items/c
 import 'package:nhom_3_damh_lttbdd/screens/save_screen/widgets/all_saved_items/saved_item_card.dart';
 
 // Màn hình chi tiết bài review
-import 'package:nhom_3_damh_lttbdd/screens/postDetailScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/temp/postDetailScreen.dart'
+    hide PostDetailScreen;
 
 /// ----------------------
 /// MÀN HÌNH HIỂN THỊ TOÀN BỘ MỤC ĐÃ LƯU

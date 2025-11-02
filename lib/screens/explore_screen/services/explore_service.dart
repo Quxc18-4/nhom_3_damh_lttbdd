@@ -2,13 +2,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '/model/post_model.dart';
 
+/// Service xử lý dữ liệu cho màn hình Explore / feed
 class ExploreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Cache để tránh fetch lặp lại
+  // Cache user để tránh fetch nhiều lần cùng 1 user
   final Map<String, User> _userCache = {};
 
-  /// Fetch danh sách Following IDs
+  /// 🔹 Lấy danh sách các userId mà người dùng đang theo dõi
   Future<Set<String>> fetchFollowingList(String userId) async {
     try {
       final followingSnapshot = await _firestore
@@ -17,6 +18,7 @@ class ExploreService {
           .collection('following')
           .get();
 
+      // Trả về Set chứa các ID
       return followingSnapshot.docs.map((doc) => doc.id).toSet();
     } catch (e) {
       debugPrint("Lỗi tải danh sách Following: $e");
@@ -24,7 +26,7 @@ class ExploreService {
     }
   }
 
-  /// Fetch thông tin user
+  /// 🔹 Lấy thông tin cơ bản của user (name, avatar)
   Future<Map<String, String>> fetchUserData(String userId) async {
     try {
       DocumentSnapshot doc = await _firestore
@@ -39,6 +41,8 @@ class ExploreService {
           'avatarUrl': data['avatarUrl'] ?? 'assets/images/default_avatar.png',
         };
       }
+
+      // Nếu không tìm thấy user
       return {
         'name': 'Không tìm thấy user',
         'avatarUrl': 'assets/images/default_avatar.png',
@@ -52,7 +56,7 @@ class ExploreService {
     }
   }
 
-  /// Fetch tất cả posts
+  /// 🔹 Lấy tất cả các bài viết (reviews) theo thời gian giảm dần
   Future<List<Post>> fetchAllPosts(String currentUserId) async {
     try {
       QuerySnapshot reviewSnapshot = await _firestore
@@ -66,16 +70,18 @@ class ExploreService {
 
       List<Post> fetchedPosts = [];
 
+      // Duyệt qua từng bài viết
       for (var reviewDoc in reviewSnapshot.docs) {
         final reviewData = reviewDoc.data() as Map<String, dynamic>? ?? {};
         final String authorId = reviewData['userId'] ?? '';
 
-        // Fetch author data
+        // Fetch dữ liệu tác giả (author) với cache
         User postAuthor = await _fetchAuthor(authorId);
 
-        // Check if liked
+        // Kiểm tra xem currentUser đã like bài viết chưa
         bool isLiked = await _checkIfLiked(reviewDoc.id, currentUserId);
 
+        // Thêm vào danh sách posts
         fetchedPosts.add(Post.fromDoc(reviewDoc, postAuthor, isLiked: isLiked));
       }
 
@@ -86,13 +92,13 @@ class ExploreService {
     }
   }
 
-  /// Fetch author với cache
+  /// 🔹 Lấy dữ liệu tác giả với cache để tránh fetch lại nhiều lần
   Future<User> _fetchAuthor(String authorId) async {
     if (authorId.isEmpty) {
       return User.empty();
     }
 
-    // Check cache
+    // Nếu đã cache, trả về luôn
     if (_userCache.containsKey(authorId)) {
       return _userCache[authorId]!;
     }
@@ -117,9 +123,10 @@ class ExploreService {
               authorData['avatarUrl'] ?? 'assets/images/default_avatar.png',
         );
 
-        _userCache[authorId] = author;
+        _userCache[authorId] = author; // Lưu cache
         return author;
       } else {
+        // Nếu user không tồn tại
         return User(
           id: authorId,
           name: 'Người dùng ẩn danh',
@@ -136,7 +143,7 @@ class ExploreService {
     }
   }
 
-  /// Check if post is liked by user
+  /// 🔹 Kiểm tra xem user hiện tại đã like bài viết chưa
   Future<bool> _checkIfLiked(String reviewId, String userId) async {
     try {
       final likeDoc = await _firestore
@@ -152,7 +159,7 @@ class ExploreService {
     }
   }
 
-  /// Lọc posts theo tab
+  /// 🔹 Lọc posts theo tab (Explore hoặc Following)
   List<Post> filterPosts({
     required List<Post> allPosts,
     required bool isExploreTab,
@@ -160,8 +167,10 @@ class ExploreService {
     required Set<String> followingIds,
   }) {
     if (isExploreTab) {
+      // Explore tab: show tất cả bài viết
       return allPosts;
     } else {
+      // Following tab: chỉ show bài viết của các user đang follow + chính mình
       final Set<String> authorizedAuthors = followingIds.toSet()..add(userId);
       return allPosts
           .where((post) => authorizedAuthors.contains(post.authorId))

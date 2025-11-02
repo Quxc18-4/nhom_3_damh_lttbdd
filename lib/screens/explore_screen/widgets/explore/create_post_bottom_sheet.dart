@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+/// Widget hiển thị BottomSheet để người dùng chọn loại bài viết muốn tạo
 class CreatePostBottomSheet extends StatelessWidget {
+  // Callbacks tương ứng với mỗi loại bài viết
   final VoidCallback onBlogTap;
   final VoidCallback onCheckinTap;
   final VoidCallback onQuestionTap;
@@ -12,6 +14,7 @@ class CreatePostBottomSheet extends StatelessWidget {
     required this.onQuestionTap,
   }) : super(key: key);
 
+  /// 🔹 Hàm tiện ích để show BottomSheet
   static void show(
     BuildContext context, {
     required VoidCallback onBlogTap,
@@ -20,7 +23,7 @@ class CreatePostBottomSheet extends StatelessWidget {
   }) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.transparent, // để bo góc đẹp hơn
       builder: (context) => CreatePostBottomSheet(
         onBlogTap: onBlogTap,
         onCheckinTap: onCheckinTap,
@@ -35,15 +38,17 @@ class CreatePostBottomSheet extends StatelessWidget {
       padding: const EdgeInsets.all(16.0),
       decoration: const BoxDecoration(
         color: Colors.white,
+        // Bo tròn góc trên của BottomSheet
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(20),
           topRight: Radius.circular(20),
         ),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: MainAxisSize.min, // chiếm đúng kích thước nội dung
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header: Tiêu đề và nút đóng
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -53,11 +58,13 @@ class CreatePostBottomSheet extends StatelessWidget {
               ),
               IconButton(
                 icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.pop(context), // đóng BottomSheet
               ),
             ],
           ),
           const Divider(height: 10),
+
+          // Các tùy chọn tạo bài viết
           _buildOptionTile(
             icon: Icons.edit_note,
             label: 'Blog',
@@ -80,6 +87,11 @@ class CreatePostBottomSheet extends StatelessWidget {
     );
   }
 
+  /// 🔹 Widget riêng cho từng option trong BottomSheet
+  /// icon: biểu tượng hiển thị
+  /// label: tên chính
+  /// subLabel: mô tả ngắn (không bắt buộc)
+  /// onTap: callback khi nhấn
   Widget _buildOptionTile({
     required IconData icon,
     required String label,
@@ -87,7 +99,7 @@ class CreatePostBottomSheet extends StatelessWidget {
     String? subLabel,
   }) {
     return InkWell(
-      onTap: onTap,
+      onTap: onTap, // xử lý nhấn
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12.0),
