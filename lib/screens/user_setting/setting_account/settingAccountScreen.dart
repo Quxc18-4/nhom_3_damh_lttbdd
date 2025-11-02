@@ -1,129 +1,129 @@
 // File: screens/user_setting/setting_account/settingAccountScreen.dart
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart'; // Thư viện chính của Flutter
 // Cập nhật đường dẫn
-import 'package:nhom_3_damh_lttbdd/screens/authentication/login/loginScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/authentication/login/loginScreen.dart'; // Màn hình đăng nhập
 // Import Service và Widget
-import 'service/setting_account_service.dart';
-import 'widget/setting_account_widgets.dart';
+import 'service/setting_account_service.dart'; // Service xử lý đăng xuất
+import 'widget/setting_account_widgets.dart'; // Các widget menu: tiêu đề, card, item
 
-class SettingAccountScreen extends StatelessWidget {
+class SettingAccountScreen extends StatelessWidget { // Màn hình cài đặt tài khoản
   const SettingAccountScreen({Key? key}) : super(key: key);
 
   // Hàm xử lý logic (controller)
-  Future<void> _signOut(
-    BuildContext context,
-    SettingAccountService service,
+  Future<void> _signOut( // Đăng xuất người dùng
+    BuildContext context, // Context để điều hướng và hiển thị dialog
+    SettingAccountService service, // Service xử lý đăng xuất
   ) async {
-    bool? confirmLogout = await showDialog<bool>(
+    bool? confirmLogout = await showDialog<bool>( // Hiển thị dialog xác nhận
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Xác nhận đăng xuất'),
-          content: const Text(
+        return AlertDialog( // Dialog cảnh báo
+          title: const Text('Xác nhận đăng xuất'), // Tiêu đề
+          content: const Text( // Nội dung
             'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này?',
           ),
-          actions: <Widget>[
-            TextButton(
+          actions: <Widget>[ // Các nút
+            TextButton( // Nút hủy
               child: const Text('Hủy'),
-              onPressed: () => Navigator.of(context).pop(false),
+              onPressed: () => Navigator.of(context).pop(false), // Đóng dialog, trả về false
             ),
-            TextButton(
+            TextButton( // Nút xác nhận
               child: const Text(
                 'Đăng xuất',
-                style: TextStyle(color: Colors.red),
+                style: TextStyle(color: Colors.red), // Chữ đỏ
               ),
-              onPressed: () => Navigator.of(context).pop(true),
+              onPressed: () => Navigator.of(context).pop(true), // Đóng dialog, trả về true
             ),
           ],
         );
       },
     );
 
-    if (confirmLogout == true) {
+    if (confirmLogout == true) { // Nếu người dùng xác nhận
       try {
-        await service.signOut(); // Gọi service
+        await service.signOut(); // Gọi service đăng xuất (Firebase Auth)
 
-        Navigator.pushAndRemoveUntil(
+        Navigator.pushAndRemoveUntil( // Xóa toàn bộ stack, chuyển về Login
           context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (Route<dynamic> route) => false,
+          MaterialPageRoute(builder: (context) => const LoginScreen()), // Màn hình mới
+          (Route<dynamic> route) => false, // Xóa hết các route cũ
         );
-      } catch (e) {
+      } catch (e) { // Bắt lỗi
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Lỗi đăng xuất: $e')));
+        ).showSnackBar(SnackBar(content: Text('Lỗi đăng xuất: $e'))); // Hiển thị lỗi
       }
     }
   }
 
-  void _showActionInProgress(BuildContext context, String actionName) {
+  void _showActionInProgress(BuildContext context, String actionName) { // Hiển thị thông báo "đang phát triển"
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Chức năng "$actionName" đang được phát triển.'),
-        duration: const Duration(seconds: 2),
+        content: Text('Chức năng "$actionName" đang được phát triển.'), // Thông báo
+        duration: const Duration(seconds: 2), // Hiển thị 2 giây
       ),
     );
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) { // Xây dựng giao diện
     // Khởi tạo service trong hàm build (vì đây là StatelessWidget)
-    final SettingAccountService service = SettingAccountService();
+    final SettingAccountService service = SettingAccountService(); // Khởi tạo service
 
     return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        leading: IconButton(
+      backgroundColor: Colors.grey[100], // Nền xám nhạt
+      appBar: AppBar( // Thanh tiêu đề
+        leading: IconButton( // Nút back
           icon: const Icon(Icons.arrow_back_ios_new),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => Navigator.of(context).pop(), // Quay lại
         ),
-        title: const Text(
+        title: const Text( // Tiêu đề
           'Cài đặt tài khoản',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.black87,
-        elevation: 0,
-        centerTitle: true,
+        backgroundColor: Colors.transparent, // Nền trong suốt
+        foregroundColor: Colors.black87, // Màu chữ/icon
+        elevation: 0, // Không bóng
+        centerTitle: true, // Căn giữa
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
+      body: SingleChildScrollView( // Cho phép cuộn
+        child: Padding( // Padding toàn bộ
+          padding: const EdgeInsets.all(16.0), // Cách đều 16dp
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start, // Căn trái
             children: [
               // === SỬ DỤNG WIDGET TỪ FILE MỚI ===
-              buildSectionTitle("Tài khoản & Bảo mật"),
-              buildClickableCard([
-                buildMenuItem(
+              buildSectionTitle("Tài khoản & Bảo mật"), // Tiêu đề nhóm
+              buildClickableCard([ // Khung chứa các mục
+                buildMenuItem( // Mục 1
                   icon: Icons.person_outline,
                   title: "Thông tin tài khoản",
                   onTap: () =>
-                      _showActionInProgress(context, "Thông tin tài khoản"),
+                      _showActionInProgress(context, "Thông tin tài khoản"), // Chưa làm
                 ),
-                buildMenuItem(
+                buildMenuItem( // Mục 2
                   icon: Icons.lock_outline,
                   title: "Mật khẩu & Bảo mật",
                   onTap: () =>
                       _showActionInProgress(context, "Mật khẩu & Bảo mật"),
                 ),
-                buildMenuItem(
+                buildMenuItem( // Mục 3
                   icon: Icons.privacy_tip_outlined,
                   title: "Thiết lập chế độ riêng tư",
                   onTap: () =>
                       _showActionInProgress(context, "Thiết lập riêng tư"),
-                  showDivider: false,
+                  showDivider: false, // Không có gạch ngang
                 ),
               ]),
-              const SizedBox(height: 24),
+              const SizedBox(height: 24), // Khoảng cách giữa các nhóm
 
-              buildSectionTitle("Cài đặt"),
+              buildSectionTitle("Cài đặt"), // Nhóm cài đặt
               buildClickableCard([
                 buildMenuItem(
                   icon: Icons.public,
                   title: "Quốc gia",
-                  trailingText: "Việt Nam",
+                  trailingText: "Việt Nam", // Hiển thị giá trị hiện tại
                   onTap: () => _showActionInProgress(context, "Chọn quốc gia"),
                 ),
                 buildMenuItem(
@@ -142,7 +142,7 @@ class SettingAccountScreen extends StatelessWidget {
               ]),
               const SizedBox(height: 24),
 
-              buildSectionTitle("Cài đặt khác"),
+              buildSectionTitle("Cài đặt khác"), // Nhóm khác
               buildClickableCard([
                 buildMenuItem(
                   icon: Icons.notifications_outlined,
@@ -169,12 +169,12 @@ class SettingAccountScreen extends StatelessWidget {
               ]),
               const SizedBox(height: 24),
 
-              buildClickableCard([
+              buildClickableCard([ // Nhóm đăng xuất (riêng)
                 buildMenuItem(
                   icon: Icons.logout,
                   title: "Đăng xuất",
-                  textColor: Colors.red,
-                  onTap: () => _signOut(context, service), // Gọi hàm xử lý
+                  textColor: Colors.red, // Chữ đỏ
+                  onTap: () => _signOut(context, service), // Gọi hàm đăng xuất
                   showDivider: false,
                 ),
               ]),
