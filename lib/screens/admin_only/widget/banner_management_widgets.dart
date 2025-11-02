@@ -6,7 +6,9 @@ import 'package:intl/intl.dart';
 import 'dart:io';
 
 /// Widget hiển thị danh sách các banner
+// `StatelessWidget`
 class BannersList extends StatelessWidget {
+  // Nhận `stream` và 1 `callback` `onDelete`
   final Stream<QuerySnapshot> stream;
   final Function(String, String) onDelete;
 
@@ -15,6 +17,7 @@ class BannersList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Dùng `StreamBuilder` để lắng nghe `stream`
     return StreamBuilder<QuerySnapshot>(
       stream: stream,
       builder: (context, snapshot) {
@@ -45,14 +48,20 @@ class BannersList extends StatelessWidget {
         }
 
         final banners = snapshot.data!.docs;
+        // Hiển thị `ListView`
         return ListView.builder(
           padding: const EdgeInsets.all(8),
           itemCount: banners.length,
           itemBuilder: (context, index) {
             final banner = banners[index];
+            // Với mỗi `banner`, tạo 1 `BannerCard`
             return BannerCard(
               banner: banner,
+              // **Truyền Callback:**
+              // Khi `BannerCard` gọi `onDelete`...
               onDelete: () =>
+                  // ...hãy gọi `onDelete` của cha, truyền
+                  // ID và Title (để hiển thị dialog xác nhận)
                   onDelete(banner.id, (banner.data() as Map)['title'] ?? ''),
             );
           },
@@ -63,22 +72,29 @@ class BannersList extends StatelessWidget {
 }
 
 /// Widget hiển thị thẻ của một banner
+// `StatelessWidget`
 class BannerCard extends StatelessWidget {
   final DocumentSnapshot banner;
-  final VoidCallback onDelete;
+  final VoidCallback onDelete; // Nhận 1 hàm callback
 
   const BannerCard({Key? key, required this.banner, required this.onDelete})
     : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    // 1. Trích xuất dữ liệu (an toàn)
     final data = banner.data() as Map<String, dynamic>;
     final title = data['title'] ?? 'Không có tiêu đề';
     final content = data['content'] ?? '';
     final imageUrl = data['imageUrl'] ?? 'N/A';
+    // Chuyển `Timestamp` (từ Firestore) -> `DateTime` (của Dart)
     final startDate = (data['startDate'] as Timestamp?)?.toDate();
     final endDate = (data['endDate'] as Timestamp?)?.toDate();
 
+    // 2. **Logic nghiệp vụ (cục bộ):**
+    // Xử lý logic *hiển thị* (UI Logic) ngay tại đây
+    // Dựa trên `startDate` và `endDate` để quyết định
+    // màu sắc và text (status).
     Color statusColor = Colors.grey;
     String statusText = 'Unknown';
     if (startDate != null && endDate != null) {
@@ -95,6 +111,7 @@ class BannerCard extends StatelessWidget {
       }
     }
 
+    // 3. Giao diện (Build UI)
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       elevation: 3,
@@ -108,6 +125,7 @@ class BannerCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
+                  // Cho Tiêu đề chiếm phần lớn
                   child: Text(
                     title,
                     style: const TextStyle(
@@ -116,15 +134,16 @@ class BannerCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                // Cái "tag" (chip) hiển thị status
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusColor.withOpacity(0.1), // Nền mờ
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: statusColor),
+                    border: Border.all(color: statusColor), // Viền
                   ),
                   child: Text(
                     statusText,
@@ -144,6 +163,7 @@ class BannerCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+            // Hiển thị ảnh (nếu có)
             if (imageUrl != 'N/A' && imageUrl.startsWith('http'))
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
@@ -173,6 +193,8 @@ class BannerCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
+            // `...` (Spread operator): Dùng để chèn
+            // nhiều widget (nếu điều kiện `if` đúng)
             if (startDate != null) ...[
               const SizedBox(height: 4),
               Text(
@@ -198,7 +220,7 @@ class BannerCard extends StatelessWidget {
                     foregroundColor: Colors.red,
                     side: const BorderSide(color: Colors.red),
                   ),
-                  onPressed: onDelete,
+                  onPressed: onDelete, // Gọi callback `onDelete`
                 ),
               ],
             ),

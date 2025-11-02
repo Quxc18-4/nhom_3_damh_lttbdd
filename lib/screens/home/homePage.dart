@@ -8,7 +8,7 @@ import 'dart:async';
 
 // Import các màn hình điều hướng (cập nhật đường dẫn nếu cần)
 import 'package:nhom_3_damh_lttbdd/screens/user_setting/profileScreen.dart';
-import 'package:nhom_3_damh_lttbdd/screens/exploreScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/explore_screen/explore_screen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/journey_map/journeyMapScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/trip_planner/tripPlannerScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/save_screen/saved_screen.dart';
