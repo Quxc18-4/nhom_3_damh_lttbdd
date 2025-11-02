@@ -9,12 +9,12 @@ import 'dart:io';
 import 'package:nhom_3_damh_lttbdd/screens/authentication/login/loginScreen.dart';
 
 // Import Service và Widgets đã tách
-import 'service/admin_service.dart';
-import 'widget/place_approval_widgets.dart';
-import 'widget/banner_management_widgets.dart';
+import 'service/admin_service.dart'; // Import bộ não (Service)
+import 'widget/place_approval_widgets.dart'; // Import UI cho tab 1
+import 'widget/banner_management_widgets.dart'; // Import UI cho tab 2
 
 class AdminDashBoardRequestView extends StatefulWidget {
-  final String userId;
+  final String userId; // Nhận ID của admin đang đăng nhập
   const AdminDashBoardRequestView({Key? key, required this.userId})
     : super(key: key);
 
@@ -23,36 +23,51 @@ class AdminDashBoardRequestView extends StatefulWidget {
       _AdminDashBoardRequestViewState();
 }
 
+// Lớp State, chứa trạng thái và logic
 class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
   // Service
-  final AdminService _service = AdminService();
+  final AdminService _service = AdminService(); // Khởi tạo 1 instance service
 
   // Biến trạng thái
-  String _selectedTab = 'pending'; // 'pending', 'banners'
-  File? _selectedImageFile;
-  String? _manualImageUrl;
+  // `_selectedTab`: Lưu `String` ('pending' hoặc 'banners')
+  // để quyết định hiển thị UI nào. Đây là biến trạng thái
+  // quan trọng nhất của màn hình này.
+  String _selectedTab = 'pending'; // Mặc định là 'pending'
+
+  // Các biến state này chỉ dùng cho dialog "Tạo Banner"
+  File? _selectedImageFile; // Lưu file ảnh nếu chọn từ máy
+  String? _manualImageUrl; // Lưu URL nếu nhập tay
 
   // --- HÀM XỬ LÝ LOGIC (CONTROLLERS) ---
+  // Các hàm này đóng vai trò "controller" hoặc "view-model".
+  // Chúng được gọi bởi UI, sau đó chúng gọi Service.
 
+  /// Luồng hoạt động của hàm `_approvePlace`
   Future<void> _approvePlace(DocumentSnapshot submission) async {
+    // 1. Hỏi xác nhận
     final confirmed = await _showConfirmDialog(
       'Duyệt địa điểm',
       'Bạn có chắc chắn muốn duyệt địa điểm này?',
     );
-    if (!confirmed) return;
+    if (!confirmed) return; // Nếu bấm "Hủy", dừng lại
 
+    // 2. Hiển thị dialog loading (xoay xoay)
     _showLoadingDialog();
+
+    // 3. `try...catch`: Bọc logic gọi service
     try {
+      // 4. Gọi service
       await _service.approvePlace(submission, widget.userId);
-      Navigator.of(context).pop(); // Tắt loading
-      _showSnackBar('Đã duyệt địa điểm thành công!');
+      Navigator.of(context).pop(); // 5. Tắt loading
+      _showSnackBar('Đã duyệt địa điểm thành công!'); // 6. Báo thành công
     } catch (e) {
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(); // 5. Tắt loading (dù lỗi)
       print('Lỗi khi duyệt place: $e');
-      _showSnackBar('Lỗi khi duyệt địa điểm: $e', isError: true);
+      _showSnackBar('Lỗi khi duyệt địa điểm: $e', isError: true); // 6. Báo lỗi
     }
   }
 
+  /// Luồng hoạt động của `_rejectPlace` (tương tự `_approvePlace`)
   Future<void> _rejectPlace(String submissionId) async {
     final confirmed = await _showConfirmDialog(
       'Từ chối địa điểm',
@@ -71,6 +86,7 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
     }
   }
 
+  /// Luồng hoạt động của `_deleteBanner` (tương tự)
   Future<void> _deleteBanner(String bannerId, String title) async {
     final confirmed = await _showConfirmDialog(
       'Xóa Banner',
@@ -89,23 +105,29 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
     }
   }
 
+  /// Luồng hoạt động của `_createBanner`
   Future<void> _createBanner(
     String title,
     String content,
     int durationDays,
   ) async {
     _showLoadingDialog();
-    String finalImageUrl;
+    String finalImageUrl; // Biến lưu URL cuối cùng
 
     try {
+      // 1. Xử lý ảnh
       if (_selectedImageFile != null) {
+        // Nếu người dùng chọn ảnh từ file
+        // -> Gọi service upload
         finalImageUrl = await _service.uploadImage(_selectedImageFile!);
       } else if (_manualImageUrl != null) {
-        finalImageUrl = _manualImageUrl!;
+        // Nếu người dùng nhập URL
+        finalImageUrl = _manualImageUrl!; // Dùng trực tiếp
       } else {
         throw Exception('Không tìm thấy URL ảnh.');
       }
 
+      // 2. Gọi service tạo banner
       await _service.createBanner(
         title: title,
         content: content,
@@ -121,6 +143,8 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
       _showSnackBar('Lỗi khi tạo Banner: $e', isError: true);
     }
 
+    // 3. Dọn dẹp state (rất quan trọng)
+    // Xóa file/url đã chọn để lần sau mở dialog, nó sẽ trống
     setState(() {
       _selectedImageFile = null;
       _manualImageUrl = null;
@@ -129,33 +153,44 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
 
   // --- HÀM HIỂN THỊ DIALOGS & BOTTOM SHEETS ---
 
+  // Hàm này rất đặc biệt
   Future<void> _pickImage(
     ImageSource source,
+    // `Function(VoidCallback)`:
+    // Nhận vào một hàm `setState` của *dialog*.
+    // **Tại sao?**
+    // Khi ta chọn ảnh xong, ta cần cập nhật 2 thứ:
+    // 1. Biến state của Màn hình (`_selectedImageFile = ...`).
+    // 2. UI của Dialog (ví dụ: đổi text nút 'Chọn nguồn ảnh'
+    //    thành 'Đã chọn ảnh').
+    // Để cập nhật UI của Dialog, ta phải gọi hàm `setState`
+    // của chính cái `StatefulBuilder` (bên dưới) tạo ra nó.
     Function(VoidCallback) setStateInDialog,
   ) async {
     try {
       final File? imageFile = await _service.pickImage(source);
       if (imageFile != null) {
-        // Cập nhật state chung
+        // Cập nhật state chung (của màn hình)
         _selectedImageFile = imageFile;
-        _manualImageUrl = null;
+        _manualImageUrl = null; // Reset cái kia
 
-        // Cập nhật UI của dialog
+        // Cập nhật UI của dialog (bằng cách gọi hàm `setState` của nó)
         setStateInDialog(() {});
 
-        Navigator.of(context).pop(); // Đóng Bottom Sheet
+        Navigator.of(context).pop(); // Đóng Bottom Sheet (chọn camera/gallery)
       }
     } catch (e) {
       _showSnackBar('Lỗi khi chọn ảnh: $e', isError: true);
     }
   }
 
+  // Hiển thị Bottom Sheet (trượt từ dưới lên)
   void _showImageSourceOptions(Function(VoidCallback) setStateInDialog) {
     showModalBottomSheet<void>(
       context: context,
       builder: (BuildContext context) {
         return Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min, // Chỉ cao vừa đủ
           children: <Widget>[
             ListTile(
               leading: const Icon(Icons.photo_library),
@@ -171,8 +206,8 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
               leading: const Icon(Icons.link),
               title: const Text('Nhập URL thủ công'),
               onTap: () {
-                Navigator.of(context).pop();
-                _showManualUrlDialog(setStateInDialog);
+                Navigator.of(context).pop(); // Đóng bottom sheet
+                _showManualUrlDialog(setStateInDialog); // Mở dialog nhập URL
               },
             ),
           ],
@@ -181,6 +216,7 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
     );
   }
 
+  // Hiển thị Dialog nhập URL
   Future<void> _showManualUrlDialog(
     Function(VoidCallback) setStateInDialog,
   ) async {
@@ -210,29 +246,39 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
             ],
           ),
         ) ??
-        false;
+        false; // `?? false`: Nếu người dùng bấm ra ngoài, coi như là 'Hủy'
 
     if (confirmed) {
-      // Cập nhật state chung
+      // Cập nhật state chung (của màn hình)
       _manualImageUrl = urlController.text.trim();
-      _selectedImageFile = null;
+      _selectedImageFile = null; // Reset cái kia
 
       // Cập nhật UI của dialog
       setStateInDialog(() {});
     }
   }
 
+  // Hiển thị Dialog tạo Banner (phức tạp)
   Future<void> _showCreateBannerDialog() async {
+    // 1. Reset state
     _selectedImageFile = null;
     _manualImageUrl = null;
 
     final titleController = TextEditingController();
     final contentController = TextEditingController();
-    int durationDays = 7;
+    int durationDays = 7; // Giá trị mặc định
 
     final result = await showDialog<bool>(
       context: context,
       builder: (context) {
+        // **Giải thích `StatefulBuilder`:**
+        // `AlertDialog` là `stateless`. Nếu ta chọn 1 ảnh
+        // (thay đổi `_selectedImageFile`) hoặc chọn Dropdown
+        // (thay đổi `durationDays`), dialog sẽ không
+        // tự cập nhật UI.
+        // `StatefulBuilder` tạo ra một "state mini" bên trong
+        // dialog, và cung cấp hàm `setStateInDialog`
+        // để "build lại" *chỉ nội dung của dialog*.
         return StatefulBuilder(
           builder: (context, setStateInDialog) {
             return AlertDialog(
@@ -260,6 +306,8 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
                     ElevatedButton.icon(
                       icon: const Icon(Icons.image),
                       label: Text(
+                        // **Logic UI động:**
+                        // Thay đổi text của nút dựa trên state
                         _selectedImageFile != null
                             ? 'Đã chọn ảnh'
                             : (_manualImageUrl != null
@@ -267,7 +315,8 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
                                   : 'Chọn nguồn ảnh'),
                       ),
                       onPressed: () {
-                        // Bỏ async/await và gọi hàm với setStateInDialog
+                        // Truyền hàm `setStateInDialog`
+                        // vào cho các hàm con.
                         _showImageSourceOptions(setStateInDialog);
                       },
                       style: ElevatedButton.styleFrom(
@@ -304,6 +353,8 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
                               .toList(),
                           onChanged: (value) {
                             if (value != null) {
+                              // Gọi `setStateInDialog` để
+                              // cập nhật UI của Dropdown
                               setStateInDialog(() => durationDays = value);
                             }
                           },
@@ -322,6 +373,7 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
                   child: const Text('Tạo'),
                   onPressed: () {
+                    // Validation
                     if (titleController.text.isEmpty ||
                         (_selectedImageFile == null &&
                             _manualImageUrl == null)) {
@@ -330,7 +382,9 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
                         isError: true,
                       );
                     } else {
-                      Navigator.of(context).pop(true);
+                      Navigator.of(
+                        context,
+                      ).pop(true); // Đóng dialog, trả về `true`
                     }
                   },
                 ),
@@ -341,11 +395,13 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
       },
     );
 
+    // 4. Nếu `showDialog` trả về `true` (bấm "Tạo")
     if (result == true) {
       _createBanner(titleController.text, contentController.text, durationDays);
     }
   }
 
+  // Dialog đăng xuất
   Future<void> _showLogoutDialog() async {
     final confirmed = await _showConfirmDialog(
       'Đăng xuất',
@@ -357,6 +413,9 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
         await _service.signOut();
         if (mounted) {
           Navigator.of(context).pop(); // Tắt loading
+          // `pushReplacement`: Thay thế màn hình hiện tại
+          // bằng màn hình Login (người dùng không thể "Back"
+          // lại trang Admin).
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const LoginScreen()),
           );
@@ -369,7 +428,9 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
   }
 
   // --- HÀM HỖ TRỢ CHUNG (DIALOGS) ---
+  // Các hàm này được dùng đi dùng lại nhiều lần
 
+  /// Hiển thị dialog xác nhận (Có/Hủy)
   Future<bool> _showConfirmDialog(String title, String message) async {
     return await showDialog<bool>(
           context: context,
@@ -389,24 +450,28 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
             ],
           ),
         ) ??
-        false;
+        false; // Nếu bấm ngoài, coi như `false`
   }
 
+  /// Hiển thị dialog loading
   void _showLoadingDialog() {
     showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: false, // Không cho bấm ra ngoài để tắt
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
   }
 
+  /// Hiển thị SnackBar
   void _showSnackBar(String message, {bool isError = false}) {
-    if (!mounted) return;
+    if (!mounted) return; // Rất quan trọng: Kiểm tra xem UI còn tồn tại không
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
-        behavior: SnackBarBehavior.floating,
+        backgroundColor: isError
+            ? Colors.red
+            : Colors.green, // Màu đỏ hoặc xanh
+        behavior: SnackBarBehavior.floating, // Kiểu "nổi"
         duration: const Duration(seconds: 3),
       ),
     );
@@ -421,19 +486,24 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
         title: const Text('Admin - Duyệt & Banner'),
         backgroundColor: Colors.teal,
         actions: [
+          // Nút bên phải AppBar
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: _showLogoutDialog,
+            onPressed: _showLogoutDialog, // Gọi hàm đăng xuất
             tooltip: 'Đăng xuất',
           ),
         ],
       ),
       body: Column(
         children: [
-          _buildFilterTabs(),
-          Expanded(child: _buildBodyContent()),
+          _buildFilterTabs(), // Thanh chọn tab (UI)
+          Expanded(child: _buildBodyContent()), // Nội dung chính (UI)
         ],
       ),
+      // **Logic Hiển thị `FloatingActionButton`:**
+      // Dùng toán tử 3 ngôi (ternary operator)
+      // Nếu `_selectedTab` là 'banners' -> Hiển thị nút
+      // Ngược lại -> `null` (không hiển thị gì)
       floatingActionButton: _selectedTab == 'banners'
           ? FloatingActionButton.extended(
               onPressed: _showCreateBannerDialog,
@@ -445,6 +515,7 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
     );
   }
 
+  // Hàm private xây dựng UI cho thanh Tab
   Widget _buildFilterTabs() {
     return Container(
       color: Colors.grey[100],
@@ -459,17 +530,29 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
     );
   }
 
+  // Hàm private xây dựng UI cho 1 nút Tab
   Widget _buildFilterButton(String label, String status) {
+    // Kiểm tra xem nút này có đang được chọn không
     final isSelected = _selectedTab == status;
+
     return Expanded(
+      // `Expanded`: Cho 2 nút chia đều
       child: GestureDetector(
+        // **Đây là logic chính:**
+        // Khi bấm vào...
         onTap: () {
+          // ...gọi `setState` để cập nhật `_selectedTab`.
+          // Ngay lập tức, `build()` sẽ được gọi lại.
+          // `isSelected` của nút này thành `true` (đổi màu)
+          // `_buildBodyContent()` sẽ hiển thị nội dung mới.
           setState(() => _selectedTab = status);
         },
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 4),
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
+            // **Logic UI động:**
+            // Đổi màu dựa trên `isSelected`
             color: isSelected ? Colors.teal : Colors.white,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
@@ -491,16 +574,27 @@ class _AdminDashBoardRequestViewState extends State<AdminDashBoardRequestView> {
     );
   }
 
+  // Hàm private xây dựng Nội dung chính
   Widget _buildBodyContent() {
+    // **Logic cốt lõi của màn hình:**
+    // Dùng `if` để quyết định render widget nào
+
     if (_selectedTab == 'pending') {
-      // === SỬ DỤNG WIDGET MỚI ===
+      // === SỬ DỤNG WIDGET MỚI (Tab 1) ===
+      // `PendingPlacesList` là 1 widget "ngu ngốc" (dumb)
+      // Nó nhận vào 2 thứ:
+      // 1. `stream`: Dữ liệu để nó tự hiển thị
+      // 2. `onApprove`, `onReject`: Các hàm *callback*
+      //    (hàm của `State` này) để khi người dùng
+      //    bấm nút, nó sẽ gọi ngược lại.
       return PendingPlacesList(
         stream: _service.getPendingPlacesStream(),
         onApprove: _approvePlace,
         onReject: _rejectPlace,
       );
     } else {
-      // === SỬ DỤNG WIDGET MỚI ===
+      // === SỬ DỤNG WIDGET MỚI (Tab 2) ===
+      // Tương tự, `BannersList` là 1 widget "ngu ngốc"
       return BannersList(
         stream: _service.getBannersStream(),
         onDelete: _deleteBanner,
