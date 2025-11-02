@@ -8,9 +8,9 @@ import 'package:google_sign_in/google_sign_in.dart'; // ✅ Cần cho Google Sig
 // Đảm bảo các import này là chính xác
 
 import 'package:nhom_3_damh_lttbdd/screens/home/homePage.dart';
-import 'package:nhom_3_damh_lttbdd/screens/registerScreen.dart';
-import 'package:nhom_3_damh_lttbdd/screens/forgotPasswordScreen.dart';
-import 'package:nhom_3_damh_lttbdd/screens/adminDashboardRequestView.dart';
+import 'package:nhom_3_damh_lttbdd/screens/authentication/register/registerScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/authentication/forgot_password/forgotPasswordScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/admin_only/adminDashboardRequestView.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);

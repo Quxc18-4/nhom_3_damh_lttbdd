@@ -6,7 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:nhom_3_damh_lttbdd/screens/add_checkins/checkinScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/personal_profile/personalProfileScreen.dart';
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
-import 'package:nhom_3_damh_lttbdd/screens/commentScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/comment/commentScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/notificationScreen.dart';
 
 // Định nghĩa lại kiểu hàm cho rõ ràng
