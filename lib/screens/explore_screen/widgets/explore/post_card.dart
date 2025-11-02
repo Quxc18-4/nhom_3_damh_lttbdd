@@ -6,11 +6,8 @@ import 'package:nhom_3_damh_lttbdd/screens/comment/commentScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/personal_profile/personalProfileScreen.dart';
 import '/model/post_model.dart';
 import 'save_dialog.dart';
-// Import screens
-// import '../../screens/personalProfileScreen.dart';
-// import '../../screens/commentScreen.dart';
 
-// Định nghĩa kiểu hàm cho callback notification
+// Định nghĩa kiểu hàm cho callback tạo thông báo
 typedef NotificationCreator =
     Future<void> Function({
       required String recipientId,
@@ -20,11 +17,14 @@ typedef NotificationCreator =
       required String message,
     });
 
+/// Widget hiển thị một bài viết (Post)
+/// Bao gồm header, content, ảnh, tags và các nút tương tác
 class PostCard extends StatefulWidget {
-  final Post post;
-  final String userId;
-  final VoidCallback onPostUpdated;
-  final NotificationCreator createNotification;
+  final Post post; // Dữ liệu bài viết
+  final String userId; // Current user ID
+  final VoidCallback
+  onPostUpdated; // Callback khi bài viết thay đổi (like/comment)
+  final NotificationCreator createNotification; // Callback tạo notification
 
   const PostCard({
     Key? key,
@@ -40,10 +40,10 @@ class PostCard extends StatefulWidget {
 
 class _PostCardState extends State<PostCard> {
   // --- STATE VARIABLES ---
-  late bool _isLiked;
-  late int _likeCount;
-  late bool _isSaved;
-  bool _isProcessing = false;
+  late bool _isLiked; // Trạng thái like của user
+  late int _likeCount; // Số lượt like
+  late bool _isSaved; // Bài viết có được bookmark không
+  bool _isProcessing = false; // Trạng thái xử lý Like/Unlike
 
   @override
   void initState() {
@@ -51,14 +51,14 @@ class _PostCardState extends State<PostCard> {
     _isLiked = widget.post.isLikedByUser;
     _likeCount = widget.post.likeCount;
     _isSaved = false;
-    _checkIfSaved();
+    _checkIfSaved(); // Kiểm tra xem bài viết đã được lưu chưa
   }
 
   // =========================================================================
   // DATA OPERATIONS
   // =========================================================================
 
-  /// Kiểm tra xem bài viết đã được lưu chưa
+  /// Kiểm tra xem bài viết đã được lưu chưa (bookmark)
   Future<void> _checkIfSaved() async {
     try {
       final bookmarkQuery = await FirebaseFirestore.instance
@@ -79,12 +79,12 @@ class _PostCardState extends State<PostCard> {
     }
   }
 
-  /// Toggle Like/Unlike
+  /// Toggle Like/Unlike bài viết
   Future<void> _toggleLike() async {
-    // Lấy current user ID từ Firebase Auth
     final currentUserId = auth.FirebaseAuth.instance.currentUser?.uid;
 
     if (currentUserId == null) {
+      // Nếu chưa login
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Bạn cần đăng nhập để thích bài viết!"),
@@ -94,9 +94,9 @@ class _PostCardState extends State<PostCard> {
       return;
     }
 
-    if (_isProcessing) return;
+    if (_isProcessing) return; // Tránh spam thao tác
 
-    // Optimistic UI update
+    // Cập nhật UI tạm thời (optimistic UI)
     final bool newLikedState = !_isLiked;
     final int likeChange = newLikedState ? 1 : -1;
 
@@ -121,7 +121,7 @@ class _PostCardState extends State<PostCard> {
         await likeRef.set({'createdAt': FieldValue.serverTimestamp()});
         await reviewRef.update({'likeCount': FieldValue.increment(1)});
 
-        // Tạo thông báo
+        // Tạo thông báo cho tác giả
         widget.createNotification(
           recipientId: widget.post.authorId,
           senderId: currentUserId,
@@ -144,11 +144,7 @@ class _PostCardState extends State<PostCard> {
       }
       debugPrint("Lỗi toggle like: $e");
     } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-        });
-      }
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
@@ -159,6 +155,7 @@ class _PostCardState extends State<PostCard> {
   /// Mở màn hình Comment
   void _showCommentScreen(BuildContext context) {
     if (auth.FirebaseAuth.instance.currentUser == null) {
+      // Nếu chưa login
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Bạn cần đăng nhập để xem/bình luận!"),
@@ -177,6 +174,7 @@ class _PostCardState extends State<PostCard> {
           reviewId: widget.post.id,
           post: widget.post,
           onCommentSent: (recipientId, senderId, reviewId, message) {
+            // Tạo thông báo comment
             widget.createNotification(
               recipientId: recipientId,
               senderId: senderId,
@@ -186,9 +184,9 @@ class _PostCardState extends State<PostCard> {
             );
           },
         );
-        // return Container(); // Placeholder
       },
     ).then((_) {
+      // Callback refresh sau khi comment xong
       widget.onPostUpdated();
     });
   }
@@ -214,7 +212,7 @@ class _PostCardState extends State<PostCard> {
           ? widget.post.imageUrls.first
           : null,
     ).then((_) {
-      _checkIfSaved(); // Refresh saved state
+      _checkIfSaved(); // Refresh trạng thái saved
     });
   }
 
@@ -233,6 +231,7 @@ class _PostCardState extends State<PostCard> {
   // UI HELPERS
   // =========================================================================
 
+  /// Lấy avatar author dưới dạng ImageProvider
   ImageProvider _getAuthorAvatar() {
     if (widget.post.author.avatarUrl.startsWith('http')) {
       return NetworkImage(widget.post.author.avatarUrl);
@@ -240,6 +239,7 @@ class _PostCardState extends State<PostCard> {
     return AssetImage(widget.post.author.avatarUrl);
   }
 
+  /// Tạo widget hiển thị ảnh với overlay tùy chọn
   Widget _buildImage(
     String imageUrl, {
     required double height,
@@ -286,6 +286,7 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  /// Tạo grid ảnh tùy theo số lượng
   Widget _buildPhotoGrid() {
     final images = widget.post.imageUrls;
     final int count = images.length;
@@ -294,7 +295,7 @@ class _PostCardState extends State<PostCard> {
 
     const double mainHeight = 300;
 
-    // 1 ảnh: Full width
+    // 1 ảnh: full width
     if (count == 1) {
       return SizedBox(
         height: mainHeight,
@@ -308,7 +309,7 @@ class _PostCardState extends State<PostCard> {
       );
     }
 
-    // 2 ảnh: 50-50
+    // 2 ảnh: ngang 50-50
     if (count == 2) {
       return SizedBox(
         height: mainHeight,
@@ -336,7 +337,7 @@ class _PostCardState extends State<PostCard> {
       );
     }
 
-    // 3 ảnh: 2/3 - 1/3 vertical
+    // 3 ảnh: 2/3 - 1/3
     if (count == 3) {
       return SizedBox(
         height: mainHeight,
@@ -381,7 +382,7 @@ class _PostCardState extends State<PostCard> {
       );
     }
 
-    // 4+ ảnh: Grid 2x2 với overlay "+N"
+    // 4+ ảnh: Grid 2x2, overlay +N nếu còn ảnh
     final remainingCount = count - 4;
 
     return SizedBox(
@@ -455,6 +456,7 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  /// Xây dựng nút Like/Comment/Share/Bookmark
   Widget _buildActionButton({
     required IconData icon,
     required String? text,
@@ -532,7 +534,6 @@ class _PostCardState extends State<PostCard> {
             widget.post.title,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
-
           const SizedBox(height: 4),
 
           // --- CONTENT ---
@@ -549,7 +550,6 @@ class _PostCardState extends State<PostCard> {
             borderRadius: BorderRadius.circular(10),
             child: _buildPhotoGrid(),
           ),
-
           const SizedBox(height: 12),
 
           // --- TAGS ---

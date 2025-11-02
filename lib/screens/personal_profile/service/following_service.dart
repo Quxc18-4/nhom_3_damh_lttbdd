@@ -1,10 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
 
+/// Model đại diện cho người dùng mà một user đang theo dõi
 class FollowingUser {
   final User user;
-  final int followersCount;
-  bool isFollowedByCurrentUser;
+  final int followersCount; // Số lượng người theo dõi
+  bool isFollowedByCurrentUser; // Trạng thái follow từ currentUser
 
   FollowingUser({
     required this.user,
@@ -13,15 +14,19 @@ class FollowingUser {
   });
 }
 
+/// Service xử lý follow / following của user
 class FollowingService {
   final _db = FirebaseFirestore.instance;
 
   /// 🔹 Lấy danh sách người mà userId đang theo dõi
+  ///
+  /// Nếu currentAuthUserId != null, đồng thời kiểm tra xem current user có follow họ hay không
   Future<List<FollowingUser>> fetchFollowing({
     required String userId,
     required String? currentAuthUserId,
   }) async {
     try {
+      // 1️⃣ Lấy tất cả document trong subcollection 'following' của user
       final followingSnapshot = await _db
           .collection('users')
           .doc(userId)
@@ -32,8 +37,9 @@ class FollowingService {
 
       List<FollowingUser> result = [];
 
+      // 2️⃣ Duyệt từng user đang được follow
       for (var doc in followingSnapshot.docs) {
-        final id = doc.id;
+        final id = doc.id; // userId của người đang follow
         final userDoc = await _db.collection('users').doc(id).get();
         if (!userDoc.exists) continue;
 
@@ -41,6 +47,7 @@ class FollowingService {
         final data = userDoc.data() ?? {};
         final followersCount = data['followersCount'] ?? 0;
 
+        // 3️⃣ Kiểm tra xem current user có follow họ không
         bool isFollowedByMe = false;
         if (currentAuthUserId != null && currentAuthUserId != id) {
           final checkFollow = await _db
@@ -52,6 +59,7 @@ class FollowingService {
           isFollowedByMe = checkFollow.exists;
         }
 
+        // 4️⃣ Thêm vào kết quả
         result.add(
           FollowingUser(
             user: user,
@@ -69,11 +77,14 @@ class FollowingService {
   }
 
   /// 🔹 Follow hoặc Unfollow một user
+  ///
+  /// Nếu isCurrentlyFollowing = true thì sẽ unfollow, ngược lại sẽ follow
   Future<void> toggleFollow({
     required String currentUserId,
     required String targetUserId,
     required bool isCurrentlyFollowing,
   }) async {
+    // References đến các document cần thay đổi
     final authUserFollowingRef = _db
         .collection('users')
         .doc(currentUserId)
@@ -94,6 +105,7 @@ class FollowingService {
         // UNFOLLOW
         await authUserFollowingRef.delete();
         await targetUserFollowerRef.delete();
+
         await authUserDocRef.update({
           'followingCount': FieldValue.increment(-1),
         });
@@ -111,6 +123,7 @@ class FollowingService {
           'followedAt': timestamp,
           'userId': currentUserId,
         });
+
         await authUserDocRef.update({
           'followingCount': FieldValue.increment(1),
         });
@@ -120,7 +133,7 @@ class FollowingService {
       }
     } catch (e) {
       print("❌ Lỗi toggleFollow: $e");
-      rethrow;
+      rethrow; // Ném lỗi ra ngoài để UI handle rollback
     }
   }
 }

@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 
+/// Dialog hiển thị để lưu bài viết vào bookmark hoặc album
 class SaveDialog extends StatefulWidget {
-  final String userId;
-  final String reviewId;
-  final String authorId;
-  final String? postImageUrl;
+  final String userId; // ID người dùng hiện tại
+  final String reviewId; // ID bài viết
+  final String authorId; // ID tác giả bài viết
+  final String? postImageUrl; // URL ảnh chính của bài viết (nếu có)
 
   const SaveDialog({
     Key? key,
@@ -40,6 +41,7 @@ class SaveDialog extends StatefulWidget {
 }
 
 class _SaveDialogState extends State<SaveDialog> {
+  // Kiểm tra user đã đăng nhập chưa
   bool get _isAuthenticated => auth.FirebaseAuth.instance.currentUser != null;
 
   // =========================================================================
@@ -85,6 +87,7 @@ class _SaveDialogState extends State<SaveDialog> {
       },
     );
 
+    // Nếu có tên album mới, thêm vào Firestore
     if (newAlbumName != null && newAlbumName.isNotEmpty) {
       try {
         await FirebaseFirestore.instance
@@ -98,7 +101,7 @@ class _SaveDialogState extends State<SaveDialog> {
               'photos': [],
             });
 
-        // Rebuild để hiển thị album mới
+        // Refresh state để hiển thị album mới
         if (mounted) setState(() {});
       } catch (e) {
         _showErrorSnackbar("Tạo album thất bại: $e");
@@ -106,7 +109,7 @@ class _SaveDialogState extends State<SaveDialog> {
     }
   }
 
-  /// Lưu bookmark vào Firestore
+  /// Lưu bài viết vào bookmark
   Future<void> _saveBookmark({String? albumId}) async {
     if (!_isAuthenticated) {
       _showErrorSnackbar("Bạn cần đăng nhập để lưu.");
@@ -122,14 +125,14 @@ class _SaveDialogState extends State<SaveDialog> {
           .collection('bookmarks')
           .add({
             'reviewID': widget.reviewId,
-            'albumId': albumId,
+            'albumId': albumId, // null nếu lưu chung
             'addedAt': FieldValue.serverTimestamp(),
             'postImageUrl': widget.postImageUrl,
-            'creator': isCreator,
+            'creator': isCreator, // đánh dấu nếu chính mình tạo bài
           });
 
       if (mounted) {
-        Navigator.of(context).pop();
+        Navigator.of(context).pop(); // đóng dialog
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(albumId == null ? "Đã lưu!" : "Đã lưu vào album!"),
@@ -142,10 +145,11 @@ class _SaveDialogState extends State<SaveDialog> {
     }
   }
 
+  /// Hiển thị Snackbar lỗi
   void _showErrorSnackbar(String message) {
     if (mounted) {
       if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
+        Navigator.of(context).pop(); // đóng dialog nếu đang mở
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message), backgroundColor: Colors.red),
@@ -162,6 +166,7 @@ class _SaveDialogState extends State<SaveDialog> {
     return AlertDialog(
       title: const Text("Lưu vào bộ sưu tập"),
       content: FutureBuilder<QuerySnapshot>(
+        // Lấy danh sách album của user
         future: FirebaseFirestore.instance
             .collection('users')
             .doc(widget.userId)
@@ -188,9 +193,9 @@ class _SaveDialogState extends State<SaveDialog> {
             width: double.maxFinite,
             child: ListView.builder(
               shrinkWrap: true,
-              itemCount: albums.length + 1, // +1 cho nút tạo mới
+              itemCount: albums.length + 1, // +1 cho nút tạo album mới
               itemBuilder: (context, index) {
-                // Item 0: Nút tạo album mới
+                // Item 0: nút tạo album mới
                 if (index == 0) {
                   return ListTile(
                     leading: const Icon(Icons.add_box_outlined),
@@ -217,10 +222,13 @@ class _SaveDialogState extends State<SaveDialog> {
         },
       ),
       actions: [
+        // Hủy
         TextButton(
           child: const Text("Hủy"),
           onPressed: () => Navigator.of(context).pop(),
         ),
+
+        // Lưu bài viết mà không thêm album
         TextButton(
           child: const Text("LƯU (KHÔNG THÊM VÀO ALBUM)"),
           onPressed: () => _saveBookmark(albumId: null),

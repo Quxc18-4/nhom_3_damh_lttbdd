@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 
+/// Widget header cho trang Explore
+/// Hiển thị avatar người dùng, tên, thông báo, thanh tìm kiếm và tabbar
 class ExploreHeader extends StatelessWidget {
-  final String userName;
-  final String userAvatarUrl;
-  final bool isUserDataLoading;
+  // Thông tin người dùng
+  final String userName; // Tên hiển thị
+  final String userAvatarUrl; // URL avatar
+  final bool isUserDataLoading; // Loading khi đang fetch dữ liệu người dùng
+
+  // TabController để điều khiển TabBar
   final TabController tabController;
+
+  // Callback khi nhấn vào avatar hoặc thông báo
   final VoidCallback onAvatarTap;
   final VoidCallback onNotificationTap;
 
@@ -23,19 +30,21 @@ class ExploreHeader extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(height: 5),
-        _buildTopBar(),
-        _buildSearchBar(),
-        _buildTabBar(),
+        const SizedBox(height: 5), // Khoảng cách trên cùng
+        _buildTopBar(), // Thanh trên cùng: avatar + tên + thông báo
+        _buildSearchBar(), // Thanh tìm kiếm
+        _buildTabBar(), // TabBar: "Khám phá" và "Dành cho bạn"
       ],
     );
   }
 
+  /// 🔹 Thanh trên cùng: avatar + tên + icon thông báo
   Widget _buildTopBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: Row(
         children: [
+          // Avatar + Tên
           InkWell(
             onTap: onAvatarTap,
             borderRadius: BorderRadius.circular(30),
@@ -44,6 +53,7 @@ class ExploreHeader extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Nếu đang load dữ liệu người dùng thì hiển thị loading spinner
                   isUserDataLoading
                       ? const CircleAvatar(
                           radius: 20,
@@ -51,7 +61,7 @@ class ExploreHeader extends StatelessWidget {
                         )
                       : CircleAvatar(
                           radius: 20,
-                          backgroundImage: _getAvatarProvider(),
+                          backgroundImage: _getAvatarProvider(), // avatar user
                         ),
                   const SizedBox(width: 12),
                   Text(
@@ -67,6 +77,7 @@ class ExploreHeader extends StatelessWidget {
             ),
           ),
           const Spacer(),
+          // Icon thông báo
           IconButton(
             icon: Icon(
               Icons.notifications_none,
@@ -80,6 +91,7 @@ class ExploreHeader extends StatelessWidget {
     );
   }
 
+  /// 🔹 Thanh tìm kiếm
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -99,6 +111,7 @@ class ExploreHeader extends StatelessWidget {
     );
   }
 
+  /// 🔹 TabBar: "Khám phá" và "Dành cho bạn"
   Widget _buildTabBar() {
     return TabBar(
       controller: tabController,
@@ -106,13 +119,15 @@ class ExploreHeader extends StatelessWidget {
         Tab(text: "Khám phá"),
         Tab(text: "Dành cho bạn"),
       ],
-      labelColor: Colors.orange,
-      unselectedLabelColor: Colors.grey,
-      indicatorColor: Colors.orange,
+      labelColor: Colors.orange, // màu tab được chọn
+      unselectedLabelColor: Colors.grey, // màu tab chưa chọn
+      indicatorColor: Colors.orange, // màu gạch dưới tab được chọn
     );
   }
 
+  /// 🔹 Lấy ImageProvider phù hợp cho avatar
   ImageProvider _getAvatarProvider() {
+    // Nếu URL là HTTP thì dùng NetworkImage, nếu không dùng AssetImage
     if (userAvatarUrl.startsWith('http')) {
       return NetworkImage(userAvatarUrl);
     }

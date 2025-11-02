@@ -9,8 +9,10 @@ import 'package:nhom_3_damh_lttbdd/screens/personal_profile/widgets/personal_pro
 import 'package:nhom_3_damh_lttbdd/screens/personal_profile/widgets/personal_profile/sliver_tab_header.dart';
 import 'package:nhom_3_damh_lttbdd/screens/personal_profile/widgets/personal_profile/timeline_post_card.dart';
 
+/// Màn hình profile cá nhân
 class PersonalProfileScreen extends StatefulWidget {
-  final String userId;
+  final String userId; // ID của user muốn xem profile
+
   const PersonalProfileScreen({super.key, required this.userId});
 
   @override
@@ -20,29 +22,31 @@ class PersonalProfileScreen extends StatefulWidget {
 class _PersonalProfileScreenState extends State<PersonalProfileScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final ProfileService _profileService = ProfileService(); // ✅ Dùng service
 
+  final ProfileService _profileService =
+      ProfileService(); // Service xử lý dữ liệu
+
+  // Thông tin user
   User _currentUser = User.empty();
   Map<String, dynamic>? _rawUserData;
   List<Post> _myPosts = [];
 
-  bool _isLoading = true;
-  bool _isMyProfile = false;
-  bool _isFollowing = false;
-  bool _isFollowLoading = false;
+  bool _isLoading = true; // Trạng thái loading toàn bộ profile
+  bool _isMyProfile = false; // Profile có phải của chính mình không
+  bool _isFollowing = false; // Trạng thái follow user
+  bool _isFollowLoading = false; // Loading khi follow/unfollow
 
   int _followersCount = 0;
   int _followingCount = 0;
   String? _currentAuthUserId;
 
-  // ignore: unused_element
   bool get _isAuthenticated => auth.FirebaseAuth.instance.currentUser != null;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    _loadProfileData();
+    _loadProfileData(); // Load dữ liệu khi mở màn hình
   }
 
   @override
@@ -56,11 +60,13 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
   // ===============================================================
   Future<void> _loadProfileData() async {
     setState(() => _isLoading = true);
+
+    // Lấy user đang đăng nhập
     _currentAuthUserId = auth.FirebaseAuth.instance.currentUser?.uid;
     _isMyProfile = (_currentAuthUserId == widget.userId);
 
     try {
-      // 1️⃣ Lấy thông tin user
+      // 1️⃣ Lấy dữ liệu user từ Firestore
       final userData = await _profileService.getUserData(widget.userId);
       if (userData != null) {
         _rawUserData = userData;
@@ -69,13 +75,13 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
         _followingCount = userData['followingCount'] ?? 0;
       }
 
-      // 2️⃣ Lấy bài viết
+      // 2️⃣ Lấy bài viết của user
       _myPosts = await _profileService.getUserPosts(
         widget.userId,
         postAuthor: _currentUser,
       );
 
-      // 3️⃣ Kiểm tra follow status nếu không phải hồ sơ của mình
+      // 3️⃣ Kiểm tra trạng thái follow nếu không phải hồ sơ của mình
       if (!_isMyProfile && _currentAuthUserId != null) {
         _isFollowing = await _profileService.isFollowing(
           _currentAuthUserId!,
@@ -101,6 +107,7 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
       );
       return;
     }
+
     if (_isFollowLoading || _isMyProfile) return;
 
     setState(() => _isFollowLoading = true);
@@ -111,9 +118,10 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
         targetUserId: widget.userId,
         isFollowing: _isFollowing,
       );
+
       setState(() {
         _isFollowing = newStatus;
-        _followersCount += newStatus ? 1 : -1;
+        _followersCount += newStatus ? 1 : -1; // Update số follower
       });
     } catch (e) {
       print("❌ Lỗi toggle follow: $e");
@@ -137,6 +145,7 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
       backgroundColor: Colors.grey[100],
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
+          // Header profile: Avatar, stats, follow button
           SliverToBoxAdapter(
             child: ProfileHeader(
               user: _currentUser,
@@ -150,6 +159,7 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
               currentUserId: widget.userId,
             ),
           ),
+          // Tab bar
           SliverPersistentHeader(
             delegate: SliverTabHeader(_tabController),
             pinned: true,
@@ -158,14 +168,14 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
         body: TabBarView(
           controller: _tabController,
           children: [
-            _buildTimeline(),
+            _buildTimeline(), // Timeline post
             IntroductionTabContent(
               userData: _rawUserData,
               userPosts: _myPosts,
               isMyProfile: _isMyProfile,
               userId: widget.userId,
             ),
-            AlbumTabContent(userId: widget.userId),
+            AlbumTabContent(userId: widget.userId), // Album
             FollowingTabContent(
               userId: widget.userId,
               currentAuthUserId: _currentAuthUserId,
@@ -198,7 +208,7 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
           post: _myPosts[i],
           currentAuthUserId: _currentAuthUserId,
           onPostUpdated:
-              _loadProfileData, // Gọi lại toàn bộ dữ liệu khi cập nhật
+              _loadProfileData, // Load lại toàn bộ dữ liệu khi post được cập nhật
         );
       },
     );

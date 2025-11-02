@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nhom_3_damh_lttbdd/model/saved_models.dart';
+import 'package:nhom_3_damh_lttbdd/screens/post_detail/post_detail_screen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/save_screen/all_collections_screen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/save_screen/service/saved_service.dart';
 import 'package:nhom_3_damh_lttbdd/screens/save_screen/widgets/save_screen/saved_search_bar.dart';
 import 'package:nhom_3_damh_lttbdd/screens/save_screen/widgets/save_screen/saved_items_section.dart';
 import 'package:nhom_3_damh_lttbdd/screens/save_screen/widgets/save_screen/collections_section.dart';
 import 'package:nhom_3_damh_lttbdd/screens/save_screen/all_saved_items_screen.dart';
-import 'package:nhom_3_damh_lttbdd/screens/postDetailScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/temp/postDetailScreen.dart'
+    hide PostDetailScreen;
 import 'package:nhom_3_damh_lttbdd/screens/save_screen/album_detail_screen.dart';
 
 /// Màn hình "Đã lưu" — nơi người dùng xem các bài viết, địa điểm, album đã lưu

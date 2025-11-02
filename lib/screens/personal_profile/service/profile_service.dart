@@ -2,12 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
 
-/// Service chuyên xử lý dữ liệu liên quan đến trang cá nhân (profile)
+/// Service xử lý dữ liệu liên quan đến trang cá nhân (profile)
 class ProfileService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final auth.FirebaseAuth _auth = auth.FirebaseAuth.instance;
 
-  /// ✅ Lấy dữ liệu người dùng theo userId
+  /// 🔹 Lấy dữ liệu người dùng theo `userId`
+  /// Trả về `Map<String, dynamic>` hoặc null nếu không tìm thấy
   Future<Map<String, dynamic>?> getUserData(String userId) async {
     try {
       DocumentSnapshot userDoc = await _firestore
@@ -22,7 +23,9 @@ class ProfileService {
     }
   }
 
-  /// ✅ Lấy danh sách bài viết (reviews) của người dùng
+  /// 🔹 Lấy danh sách bài viết (reviews) của người dùng
+  /// - `postAuthor`: có thể truyền User để gán cho Post
+  /// - Tính cả trạng thái liked bởi current user
   Future<List<Post>> getUserPosts(String userId, {User? postAuthor}) async {
     List<Post> posts = [];
     try {
@@ -35,6 +38,7 @@ class ProfileService {
       final currentAuthUserId = _auth.currentUser?.uid;
 
       for (var doc in snapshot.docs) {
+        // Kiểm tra xem user hiện tại đã like post chưa
         bool isLiked = false;
         if (currentAuthUserId != null) {
           final likeDoc = await _firestore
@@ -55,7 +59,7 @@ class ProfileService {
     return posts;
   }
 
-  /// ✅ Kiểm tra xem currentUser có đang follow người khác không
+  /// 🔹 Kiểm tra xem `currentUserId` có đang follow `targetUserId` không
   Future<bool> isFollowing(String currentUserId, String targetUserId) async {
     try {
       final doc = await _firestore
@@ -71,7 +75,9 @@ class ProfileService {
     }
   }
 
-  /// ✅ Theo dõi hoặc bỏ theo dõi người dùng khác
+  /// 🔹 Theo dõi hoặc bỏ theo dõi một user
+  ///
+  /// Trả về trạng thái follow mới (true nếu đang follow, false nếu unfollow)
   Future<bool> toggleFollow({
     required String currentUserId,
     required String targetUserId,
@@ -94,14 +100,14 @@ class ProfileService {
 
     try {
       if (isFollowing) {
-        // Bỏ theo dõi
+        // 🔹 Bỏ theo dõi
         await myFollowing.delete();
         await theirFollowers.delete();
         await myDoc.update({'followingCount': FieldValue.increment(-1)});
         await theirDoc.update({'followersCount': FieldValue.increment(-1)});
         return false;
       } else {
-        // Theo dõi
+        // 🔹 Theo dõi
         final timestamp = FieldValue.serverTimestamp();
         await myFollowing.set({'followedAt': timestamp});
         await theirFollowers.set({'followedAt': timestamp});
@@ -111,7 +117,7 @@ class ProfileService {
       }
     } catch (e) {
       print("❌ Lỗi toggleFollow: $e");
-      return isFollowing;
+      return isFollowing; // rollback trạng thái nếu lỗi
     }
   }
 }
