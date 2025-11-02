@@ -1,85 +1,93 @@
+// File: loginScreen.dart
+
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ Cần cho Firestore
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart'; // ✅ Cần cho Facebook Login
-import 'package:google_sign_in/google_sign_in.dart'; // ✅ Cần cho Google Sign-In
-
-// Đảm bảo các import này là chính xác
-
-import 'package:nhom_3_damh_lttbdd/screens/home/homePage.dart';
-import 'package:nhom_3_damh_lttbdd/screens/authentication/register/registerScreen.dart';
-import 'package:nhom_3_damh_lttbdd/screens/authentication/forgot_password/forgotPasswordScreen.dart';
+// ... (các import khác) ...
 import 'package:nhom_3_damh_lttbdd/screens/admin_only/adminDashboardRequestView.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
 
   @override
+  // Tạo ra đối tượng State (bộ não)
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  // `TextEditingController`: Dùng để "điều khiển" các ô TextField.
+  // Giúp chúng ta đọc (get) và gán (set) giá trị cho chúng.
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  bool _rememberMe = false;
-  bool _obscurePassword = true;
+
+  // Biến trạng thái (State):
+  bool _rememberMe = false; // Trạng thái của checkbox
+  bool _obscurePassword = true; // Trạng thái Ẩn/Hiện mật khẩu
 
   // =========================================================================
   // HÀM HIỂN THỊ/ẨN LOADING VÀ SNACKBAR
   // =========================================================================
 
+  // Hàm helper (hỗ trợ) để hiển thị dialog loading
   void _showLoading() {
     showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: false, // Không cho bấm ra ngoài để tắt
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
   }
 
+  // Hàm helper để tắt dialog (bất kể dialog đó là gì)
   void _hideLoading() {
     Navigator.of(context).pop();
   }
 
+  // Hàm helper để hiển thị thanh thông báo (SnackBar)
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  // **Luồng hoạt động chính:** Hàm điều hướng sau khi đăng nhập
   Future<void> _navigateAfterLogin(User user) async {
     String? userRank;
     try {
-      // Lấy document của user từ Firestore
+      // 1. Đọc trực tiếp Firestore từ View
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
 
       if (userDoc.exists) {
-        // Đọc trường userRank (nếu có)
+        // 2. Lấy `userRank`
         userRank =
             (userDoc.data() as Map<String, dynamic>)['userRank'] as String?;
       }
     } catch (e) {
       print("Lỗi khi đọc userRank: $e");
-      // Bỏ qua lỗi đọc rank, coi như user thường
+      // Bỏ qua, coi như user thường
     }
 
-    // Ẩn loading (nếu đang hiển thị) - Di chuyển _hideLoading ra khỏi các hàm login
-    // _hideLoading(); // <-- Xóa _hideLoading ở cuối các hàm _loginUser, _signInWithFacebook, _signInWithGoogle
+    // `if (!mounted) return;`: (Rất quan trọng)
+    // `mounted` là `true` nếu Widget (màn hình) vẫn còn
+    // trên cây (đang hiển thị).
+    // Vì đây là hàm `async`, có thể user đã bấm back
+    // trong lúc đang `await`. Nếu cố điều hướng (navigate)
+    // khi `mounted` là `false`, app sẽ crash.
+    if (!mounted) return;
 
-    if (!mounted) return; // Kiểm tra mounted trước khi điều hướng
-
-    // Điều hướng dựa trên userRank
+    // 3. Điều hướng
     if (userRank == 'Admin') {
       print("User is Admin, navigating to Admin Dashboard.");
+      // `pushAndRemoveUntil`:
+      // **Tại sao?** Đẩy (push) màn hình Admin VÀ
+      // Xóa (remove) tất cả màn hình cũ (màn hình Login).
+      // Điều này ngăn người dùng bấm "Back" để quay lại Login.
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder: (context) => AdminDashBoardRequestView(userId: user.uid),
         ),
-        (Route<dynamic> route) => false,
+        (Route<dynamic> route) => false, // Xóa tất cả
       );
     } else {
       print("User is not Admin, navigating to Home Page.");
@@ -95,30 +103,37 @@ class _LoginScreenState extends State<LoginScreen> {
   // 1. HÀM ĐĂNG NHẬP BẰNG EMAIL/PASSWORD
   // =========================================================================
   Future<void> _loginUser() async {
+    // 1. Lấy và "làm sạch" (trim) dữ liệu
     final String email = _emailController.text.trim();
     final String password = _passwordController.text.trim();
 
+    // 2. Validation (Kiểm tra)
     if (email.isEmpty || password.isEmpty) {
       _showSnackBar('Vui lòng nhập email và mật khẩu.');
-      return;
+      return; // Dừng hàm
     }
 
-    _showLoading();
+    _showLoading(); // Hiển thị vòng quay
 
     try {
+      // 3. Gọi Firebase Auth
       final UserCredential userCredential = await FirebaseAuth.instance
           .signInWithEmailAndPassword(email: email, password: password);
 
       final User? user = userCredential.user;
 
       if (user != null) {
-        // 3. Đăng nhập thành công, lấy userID và chuyển hướng
+        // 4. Đăng nhập thành công, gọi hàm điều hướng
+        // (Hàm này sẽ tự tắt loading dialog bằng cách
+        // thay thế màn hình)
         await _navigateAfterLogin(user);
       }
     } on FirebaseAuthException catch (e) {
-      _hideLoading();
+      // 5. Bắt lỗi từ Firebase
+      _hideLoading(); // Tắt vòng quay
 
       String message = 'Đã có lỗi xảy ra.';
+      // Dịch mã lỗi sang tiếng Việt
       if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
         message = 'Email hoặc mật khẩu không chính xác.';
       } else if (e.code == 'wrong-password') {
@@ -128,40 +143,43 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       _showSnackBar(message);
     } catch (e) {
+      // 6. Bắt các lỗi khác
       _hideLoading();
       _showSnackBar('Lỗi không xác định: $e');
     }
   }
 
   // =========================================================================
-  // 2. HÀM ĐĂNG NHẬP BẰNG FACEBOOK (Dựa trên code từ RegisterScreen)
+  // 2. HÀM ĐĂNG NHẬP BẰNG FACEBOOK
   // =========================================================================
   Future<void> _signInWithFacebook() async {
     _showLoading();
     try {
-      // 1. Thực hiện Đăng nhập bằng Facebook
+      // 1. Gọi SDK của Facebook
       final LoginResult result = await FacebookAuth.instance.login();
 
       if (result.status == LoginStatus.success) {
         final accessToken = result.accessToken!.token;
+        // 2. Tạo "Giấy thông hành" Firebase
         final facebookAuthCredential = FacebookAuthProvider.credential(
           accessToken,
         );
 
-        // 2. Đăng nhập/Đăng ký vào Firebase
+        // 3. Đăng nhập vào Firebase
         UserCredential userCredential = await FirebaseAuth.instance
             .signInWithCredential(facebookAuthCredential);
         User? user = userCredential.user;
 
         if (user != null) {
-          // 3. Kiểm tra và Lưu thông tin người dùng lên Cloud Firestore
-          // Chỉ tạo user mới nếu chưa tồn tại
+          // 4. **Logic `_ensureUserInFirestore` (viết trực tiếp):**
+          // Kiểm tra xem user có tồn tại trong 'users' collection không
           DocumentSnapshot userDoc = await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .get();
 
           if (!userDoc.exists) {
+            // Nếu không -> Tạo mới
             String name = user.displayName ?? 'Người dùng Facebook';
             String avatarUrl = user.photoURL ?? '';
 
@@ -182,10 +200,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 });
           }
 
-          // 4. Xử lý sau khi thành công
-          _hideLoading();
+          // 5. Xử lý sau khi thành công
+          _hideLoading(); // Tắt loading
           _showSnackBar('Đăng nhập bằng Facebook thành công!');
-          await _navigateAfterLogin(user);
+          await _navigateAfterLogin(user); // Điều hướng
         }
       } else if (result.status == LoginStatus.cancelled) {
         _hideLoading();
@@ -202,57 +220,46 @@ class _LoginScreenState extends State<LoginScreen> {
       _showSnackBar('Lỗi không xác định: $e');
     }
   }
-  // =========================================================================
-  // END HÀM ĐĂNG NHẬP BẰNG FACEBOOK
-  // =========================================================================
 
   // =========================================================================
   // 3. HÀM ĐĂNG NHẬP BẰNG GOOGLE
   // =========================================================================
-
-  // Dán hàm này vào trong class _LoginScreenState của bạn
-
-  // Thay thế toàn bộ hàm này trong file loginScreen.dart hoặc registerScreen.dart
-
   Future<void> _signInWithGoogle() async {
-    _showLoading(); // Dùng lại hàm helper _showLoading của bạn
+    _showLoading();
     try {
-      // 1. Bắt đầu quá trình đăng nhập với Google.
-      // Đây là cách gọi đúng cho phiên bản mới nhất.
+      // 1. Gọi SDK của Google
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
 
-      // 2. Nếu người dùng hủy, googleUser sẽ là null.
       if (googleUser == null) {
         _hideLoading();
-        _showSnackBar(
-          'Đăng nhập Google đã bị hủy.',
-        ); // Dùng helper _showSnackBar
+        _showSnackBar('Đăng nhập Google đã bị hủy.');
         return;
       }
 
-      // 3. Lấy thông tin xác thực (idToken và accessToken) từ tài khoản Google.
+      // 2. Lấy token
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
-      // 4. Tạo một "Firebase credential" từ các token đó.
+      // 3. Tạo "Giấy thông hành" Firebase
       final AuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      // 5. Dùng credential đó để đăng nhập vào Firebase.
+      // 4. Đăng nhập Firebase
       final UserCredential userCredential = await FirebaseAuth.instance
           .signInWithCredential(credential);
       final User? user = userCredential.user;
 
       if (user != null) {
-        // 6. Kiểm tra và lưu thông tin vào Firestore.
+        // 5. **Logic `_ensureUserInFirestore` (viết trực tiếp):**
         final DocumentSnapshot userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .get();
 
         if (!userDoc.exists) {
+          // Nếu không -> Tạo mới
           await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
@@ -275,10 +282,9 @@ class _LoginScreenState extends State<LoginScreen> {
               });
         }
 
-        // 7. Điều hướng đến trang chủ.
+        // 6. Điều hướng
         _hideLoading();
         if (mounted) {
-          // Thêm kiểm tra `mounted` để đảm bảo an toàn
           await _navigateAfterLogin(user);
         }
       }
@@ -289,33 +295,25 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // =========================================================================
-  // END HÀM ĐĂNG NHẬP BẰNG GOOGLE
-  // =========================================================================
 
   @override
+  // `dispose`: Được gọi khi màn hình bị hủy (thoát ra).
   void dispose() {
+    // **Rất quan trọng:** Phải `dispose()` các controller
+    // để tránh rò rỉ bộ nhớ (memory leak).
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  // Hàm xây dựng nút mạng xã hội (giữ nguyên)
+  // Hàm private để xây dựng UI (bạn đã tách ra file widget)
   Widget _buildSocialButton({
     required String imagePath,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(50),
-      child: SizedBox(
-        width: 50,
-        height: 50,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(50),
-          child: Image.asset(imagePath, fit: BoxFit.contain),
-        ),
-      ),
-    );
+    // ... (code UI) ...
+    // (Trong file `login_widgets.dart` của bạn có 1
+    // widget `SocialButton` làm y hệt việc này)
   }
 
   @override
@@ -324,320 +322,65 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: Colors.grey[100],
       appBar: AppBar(backgroundColor: Colors.grey[100]),
       body: SafeArea(
+        // `SingleChildScrollView`: (Rất quan trọng)
+        // Bọc `Column` để khi bàn phím ảo hiện lên,
+        // nội dung có thể cuộn, tránh lỗi "Overflowed"
+        // (nội dung bị đè lên nhau).
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 20),
-
-                /// Logo
-                Center(
-                  child: Image.asset(
-                    'assets/images/logo.png',
-                    height: 120,
-                    width: 120,
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                /// Tiêu đề
-                const Center(
-                  child: Text(
-                    'Đăng Nhập',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                // ... (Các trường Email, Password, Nút Login giữ nguyên) ...
+                // ... (Logo, Tiêu đề) ...
 
                 /// Email
-                const Text(
-                  'Số điện thoại hoặc email',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(25),
-                    border: Border.all(color: Colors.orange[300]!),
-                  ),
-                  child: TextField(
-                    controller: _emailController,
-                    decoration: InputDecoration(
-                      hintText: 'Email hoặc số điện thoại của bạn',
-                      hintStyle: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 14,
-                      ),
-                      prefixIcon: Icon(
-                        Icons.email_outlined,
-                        color: Colors.grey[600],
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 16,
-                      ),
-                    ),
-                  ),
-                ),
-
+                // ... (Code UI cho Email Field) ...
+                // Bạn có thể thay thế toàn bộ khối này bằng:
+                // EmailField(controller: _emailController),
                 const SizedBox(height: 16),
 
                 /// Password
-                const Text(
-                  'Mật khẩu',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(25),
-                    border: Border.all(color: Colors.orange[300]!),
-                  ),
-                  child: TextField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      hintText: 'Nhập mật khẩu của bạn',
-                      hintStyle: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 14,
-                      ),
-                      prefixIcon: Icon(
-                        Icons.lock_outline,
-                        color: Colors.grey[600],
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          color: Colors.grey[400],
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 16,
-                      ),
-                    ),
-                  ),
-                ),
-
+                // ... (Code UI cho Password Field) ...
+                // Bạn có thể thay thế toàn bộ khối này bằng:
+                // PasswordField(
+                //   controller: _passwordController,
+                //   obscurePassword: _obscurePassword,
+                //   onToggleObscure: () {
+                //     setState(() {
+                //       _obscurePassword = !_obscurePassword;
+                //     });
+                //   },
+                // ),
                 const SizedBox(height: 24),
 
                 /// Login Button
-                ElevatedButton(
-                  onPressed: _loginUser,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange[400],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Đăng nhập',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward, size: 20),
-                    ],
-                  ),
-                ),
+                // ... (Code UI cho Login Button) ...
+                // Bạn có thể thay thế toàn bộ khối này bằng:
+                // LoginButton(
+                //   onPressed: _loginUser,
+                //   isLoading: false, // Bạn cần 1 biến _isLoading
+                // ),
 
-                const SizedBox(height: 16),
+                // ... (Remember me & Forgot Password) ...
 
-                /// Remember me & Forgot Password (Giữ nguyên)
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: Checkbox(
-                        value: _rememberMe,
-                        onChanged: (value) {
-                          setState(() {
-                            _rememberMe = value ?? false;
-                          });
-                        },
-                        activeColor: Colors.orange[400],
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'Lưu đăng nhập cho những lần sau',
-                        style: TextStyle(fontSize: 12, color: Colors.black87),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ForgotPasswordScreen(),
-                          ),
-                        );
-                      },
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                      ),
-                      child: Text(
-                        'Quên mật khẩu?',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.orange[600],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-
-                /// Social buttons (ĐÃ SỬA: Thêm onTap cho Facebook)
+                /// Social buttons
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     _buildSocialButton(
                       imagePath: 'assets/images/facebook.png',
-                      onTap: _signInWithFacebook, // ✅ GỌI HÀM FACEBOOK LOGIN
+                      onTap: _signInWithFacebook, // ✅ GỌI HÀM FACEBOOK
                     ),
                     const SizedBox(width: 16),
                     _buildSocialButton(
                       imagePath: 'assets/images/google.png',
-                      onTap: () {
-                        _signInWithGoogle(); // ✅ GỌI HÀM GOOGLE LOGIN
-                      },
+                      onTap: _signInWithGoogle, // ✅ GỌI HÀM GOOGLE
                     ),
-                    const SizedBox(width: 16),
-                    _buildSocialButton(
-                      imagePath: 'assets/images/apple.png',
-                      onTap: () {
-                        // Handle Apple login (Chưa tích hợp)
-                      },
-                    ),
-                    const SizedBox(width: 16),
-                    _buildSocialButton(
-                      imagePath: 'assets/images/instagram.png',
-                      onTap: () {
-                        // Handle Instagram login (Chưa tích hợp)
-                      },
-                    ),
+                    // ... (Các nút social khác) ...
                   ],
                 ),
-                const SizedBox(height: 24),
-
-                // ... (Phần Đăng ký và Điều khoản giữ nguyên) ...
-
-                /// Sign up link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      'Bạn chưa có tài khoản? ',
-                      style: TextStyle(fontSize: 14, color: Colors.black87),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const RegisterScreen(),
-                          ),
-                        );
-                      },
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text(
-                        'Đăng ký',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.orange[600],
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                /// Terms
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: RichText(
-                    textAlign: TextAlign.center,
-                    text: TextSpan(
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                      children: [
-                        const TextSpan(
-                          text:
-                              'Khi nhập vào Đăng ký, bạn đã xác nhận đồng ý với ',
-                        ),
-                        TextSpan(
-                          text: 'Điều khoản dịch vụ',
-                          style: TextStyle(
-                            color: Colors.orange[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const TextSpan(text: ' và '),
-                        TextSpan(
-                          text: 'Chính sách bảo mật',
-                          style: TextStyle(
-                            color: Colors.orange[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const TextSpan(text: ' của chúng tôi.'),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 32),
+                // ... (Link Đăng ký, Điều khoản) ...
               ],
             ),
           ),
