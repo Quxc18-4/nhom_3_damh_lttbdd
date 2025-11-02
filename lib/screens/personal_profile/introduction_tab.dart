@@ -7,11 +7,12 @@ import 'package:nhom_3_damh_lttbdd/screens/personal_profile/service/introduction
 import 'package:nhom_3_damh_lttbdd/screens/personal_profile/widgets/introduction_tab/bio_editor.dart';
 import 'package:nhom_3_damh_lttbdd/screens/personal_profile/widgets/introduction_tab/stat_card.dart';
 
+/// Widget cho tab "Giới thiệu" trong profile
 class IntroductionTabContent extends StatefulWidget {
-  final Map<String, dynamic>? userData;
-  final List<Post> userPosts;
-  final bool isMyProfile;
-  final String userId;
+  final Map<String, dynamic>? userData; // Dữ liệu user
+  final List<Post> userPosts; // Danh sách bài viết user
+  final bool isMyProfile; // Xác định đây có phải profile của chính mình
+  final String userId; // ID user
 
   const IntroductionTabContent({
     Key? key,
@@ -28,12 +29,13 @@ class IntroductionTabContent extends StatefulWidget {
 class _IntroductionTabContentState extends State<IntroductionTabContent> {
   final IntroductionService _service = IntroductionService();
 
-  bool _isEditingBio = false;
-  bool _isBioLoading = false;
-  bool _isLocaleReady = false;
+  bool _isEditingBio = false; // Trạng thái đang edit bio
+  bool _isBioLoading = false; // Trạng thái lưu bio
+  bool _isLocaleReady = false; // Kiểm tra locale đã load xong chưa
 
-  late TextEditingController _bioController;
+  late TextEditingController _bioController; // Controller cho bio
 
+  // Thành tích
   int _destinationCount = 0;
   int _postCount = 0;
   int _totalLikes = 0;
@@ -42,16 +44,19 @@ class _IntroductionTabContentState extends State<IntroductionTabContent> {
   @override
   void initState() {
     super.initState();
+    // Khởi tạo bio controller
     _bioController = TextEditingController(text: widget.userData?['bio'] ?? '');
-    _initLocale();
-    _updateAchievements();
+    _initLocale(); // Khởi tạo locale cho DateFormat
+    _updateAchievements(); // Tính toán thành tích từ dữ liệu
   }
 
+  /// Khởi tạo locale tiếng Việt cho hiển thị ngày tháng
   Future<void> _initLocale() async {
     await initializeDateFormatting('vi_VN');
     setState(() => _isLocaleReady = true);
   }
 
+  /// Tính toán các chỉ số thành tích
   void _updateAchievements() {
     final result = _service.calculateAchievements(
       widget.userData,
@@ -65,6 +70,7 @@ class _IntroductionTabContentState extends State<IntroductionTabContent> {
     });
   }
 
+  /// Lưu bio mới vào Firestore
   Future<void> _saveBio() async {
     if (_isBioLoading) return;
     setState(() => _isBioLoading = true);
@@ -92,6 +98,7 @@ class _IntroductionTabContentState extends State<IntroductionTabContent> {
 
   @override
   Widget build(BuildContext context) {
+    // Chờ locale load xong trước khi hiển thị
     if (!_isLocaleReady) {
       return const Center(
         child: CircularProgressIndicator(color: Colors.orange),
@@ -124,6 +131,7 @@ class _IntroductionTabContentState extends State<IntroductionTabContent> {
     );
   }
 
+  /// Card giới thiệu: Bio, City, Joined date
   Widget _buildIntroCard(String bio, String city, String joined) {
     return Card(
       elevation: 1,
@@ -133,6 +141,7 @@ class _IntroductionTabContentState extends State<IntroductionTabContent> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header: Title + nút edit (nếu là chủ profile)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -148,6 +157,7 @@ class _IntroductionTabContentState extends State<IntroductionTabContent> {
               ],
             ),
             const SizedBox(height: 12),
+            // Bio editor hoặc hiển thị text
             if (_isEditingBio)
               BioEditor(
                 controller: _bioController,
@@ -180,6 +190,7 @@ class _IntroductionTabContentState extends State<IntroductionTabContent> {
     );
   }
 
+  /// Row hiển thị icon + text
   Widget _buildInfoRow(IconData icon, String text) {
     return Row(
       children: [
@@ -192,6 +203,7 @@ class _IntroductionTabContentState extends State<IntroductionTabContent> {
     );
   }
 
+  /// Hiển thị thành tích: Điểm đến, bài viết, lượt thích, bình luận
   Widget _buildAchievements() {
     final format = NumberFormat.compact(locale: 'en_US');
     return Column(

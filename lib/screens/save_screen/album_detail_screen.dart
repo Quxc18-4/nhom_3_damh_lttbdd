@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:nhom_3_damh_lttbdd/screens/postDetailScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/temp/postDetailScreen.dart'
+    hide PostDetailScreen;
+import 'package:nhom_3_damh_lttbdd/screens/post_detail/post_detail_screen.dart';
 import '/model/album_models.dart';
 import 'package:nhom_3_damh_lttbdd/screens/save_screen/service/album_service.dart';
 

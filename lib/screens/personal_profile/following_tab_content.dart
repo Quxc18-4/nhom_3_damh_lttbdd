@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:nhom_3_damh_lttbdd/screens/personal_profile/service/following_service.dart';
 import 'package:nhom_3_damh_lttbdd/screens/personal_profile/personalProfileScreen.dart';
 
+// Widget cho tab "Following" trong profile
 class FollowingTabContent extends StatefulWidget {
-  final String userId;
-  final String? currentAuthUserId;
-  final bool isMyProfile;
+  final String userId; // ID profile đang xem
+  final String? currentAuthUserId; // ID người đang đăng nhập
+  final bool isMyProfile; // Xác định đây có phải profile của chính mình
 
   const FollowingTabContent({
     super.key,
@@ -19,15 +20,18 @@ class FollowingTabContent extends StatefulWidget {
 }
 
 class _FollowingTabContentState extends State<FollowingTabContent> {
-  final FollowingService _service = FollowingService();
-  bool _isLoading = true;
-  List<FollowingUser> _followingList = [];
+  final FollowingService _service =
+      FollowingService(); // Service quản lý dữ liệu following
+  bool _isLoading = true; // Trạng thái loading
+  List<FollowingUser> _followingList = []; // Danh sách người đang follow
 
   @override
   void initState() {
     super.initState();
-    _loadFollowing();
+    _loadFollowing(); // Tải danh sách following khi widget khởi tạo
   }
+
+  // --- HÀM XỬ LÝ DỮ LIỆU ---
 
   Future<void> _loadFollowing() async {
     setState(() => _isLoading = true);
@@ -42,8 +46,10 @@ class _FollowingTabContentState extends State<FollowingTabContent> {
     });
   }
 
+  // Logic follow/unfollow
   Future<void> _toggleFollow(FollowingUser user) async {
     if (widget.currentAuthUserId == null) {
+      // Nếu chưa login, show snackbar
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Bạn cần đăng nhập để thực hiện hành động này!"),
@@ -55,26 +61,31 @@ class _FollowingTabContentState extends State<FollowingTabContent> {
 
     final oldStatus = user.isFollowedByCurrentUser;
     setState(() {
+      // Cập nhật UI trước
       user.isFollowedByCurrentUser = !oldStatus;
       if (widget.isMyProfile && oldStatus) {
+        // Nếu đang xem profile của mình và unfollow, remove khỏi list
         _followingList.remove(user);
       }
     });
 
     try {
+      // Gọi service cập nhật Firestore
       await _service.toggleFollow(
         currentUserId: widget.currentAuthUserId!,
         targetUserId: user.user.id,
         isCurrentlyFollowing: oldStatus,
       );
     } catch (_) {
-      // rollback nếu lỗi
+      // Rollback nếu xảy ra lỗi
       setState(() {
         user.isFollowedByCurrentUser = oldStatus;
         if (widget.isMyProfile && oldStatus) _loadFollowing();
       });
     }
   }
+
+  // --- BUILD WIDGET ---
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +114,8 @@ class _FollowingTabContentState extends State<FollowingTabContent> {
     );
   }
 
+  // --- WIDGET ITEM FOLLOWING ---
+
   Widget _buildFollowingItem(BuildContext context, FollowingUser item) {
     final avatarProvider = item.user.avatarUrl.startsWith('http')
         ? NetworkImage(item.user.avatarUrl)
@@ -112,6 +125,7 @@ class _FollowingTabContentState extends State<FollowingTabContent> {
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Row(
         children: [
+          // Avatar click vào chuyển profile
           InkWell(
             onTap: () => Navigator.push(
               context,
@@ -122,6 +136,7 @@ class _FollowingTabContentState extends State<FollowingTabContent> {
             child: CircleAvatar(radius: 25, backgroundImage: avatarProvider),
           ),
           const SizedBox(width: 12),
+          // Tên và số follower
           Expanded(
             child: InkWell(
               onTap: () => Navigator.push(
@@ -149,33 +164,41 @@ class _FollowingTabContentState extends State<FollowingTabContent> {
               ),
             ),
           ),
+          // Nút Follow / Unfollow
           _buildFollowButton(item),
         ],
       ),
     );
   }
 
+  // --- WIDGET NÚT FOLLOW / UNFOLLOW ---
+
   Widget _buildFollowButton(FollowingUser item) {
     final isMyProfile = widget.isMyProfile;
     final currentUserId = widget.currentAuthUserId;
 
     if (isMyProfile) {
+      // Chủ profile -> luôn hiển thị nút outlined "Hủy theo dõi"
       return _outlinedButton("Hủy theo dõi", Colors.white, Colors.orange, () {
         _toggleFollow(item);
       });
     }
 
+    // Nếu item là chính user đang login -> ẩn nút
     if (item.user.id == currentUserId) return const SizedBox(width: 90);
 
+    // Nếu đang follow -> hiển thị nút outlined
     return item.isFollowedByCurrentUser
         ? _outlinedButton("Hủy theo dõi", Colors.white, Colors.orange, () {
             _toggleFollow(item);
           })
+        // Nếu chưa follow -> hiển thị nút filled màu cam
         : _filledButton("Follow", Colors.orange, Colors.white, () {
             _toggleFollow(item);
           });
   }
 
+  // Nút outlined
   Widget _outlinedButton(
     String text,
     Color bgColor,
@@ -201,6 +224,7 @@ class _FollowingTabContentState extends State<FollowingTabContent> {
     );
   }
 
+  // Nút filled
   Widget _filledButton(
     String text,
     Color bgColor,
