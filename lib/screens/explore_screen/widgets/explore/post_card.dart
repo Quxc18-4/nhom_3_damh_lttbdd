@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:intl/intl.dart';
-import 'package:nhom_3_damh_lttbdd/screens/commentScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/comment/commentScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/personal_profile/personalProfileScreen.dart';
 import '/model/post_model.dart';
 import 'save_dialog.dart';
