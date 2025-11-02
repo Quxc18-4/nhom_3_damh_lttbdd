@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'follow_button.dart';
-import 'package:nhom_3_damh_lttbdd/screens/accountSettingScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/user_setting/account_info/accountSettingScreen.dart';
 
 import 'package:nhom_3_damh_lttbdd/screens/add_checkins/checkinScreen.dart';
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart';

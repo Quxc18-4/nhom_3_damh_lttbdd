@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
-import 'package:nhom_3_damh_lttbdd/screens/commentScreen.dart'; // Import CommentScreen
+import 'package:nhom_3_damh_lttbdd/screens/comment/commentScreen.dart'; // Import CommentScreen
 
 class TimelinePostCard extends StatefulWidget {
   final Post post;

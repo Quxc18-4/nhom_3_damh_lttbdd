@@ -119,7 +119,7 @@ class LoginService {
   /// 3. Đăng nhập bằng Facebook
   Future<LoginResult> loginWithFacebook() async {
     try {
-      final LoginResult result = await _facebookAuth.login();
+      final result = await _facebookAuth.login();
 
       if (result.status == LoginStatus.success) {
         final accessToken = result.accessToken!.token;
