@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'follow_button.dart';
 import 'package:nhom_3_damh_lttbdd/screens/user_setting/account_info/accountSettingScreen.dart';
+import 'follow_button.dart';
 
 import 'package:nhom_3_damh_lttbdd/screens/add_checkins/checkinScreen.dart';
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
@@ -137,15 +137,28 @@ class ProfileHeader extends StatelessWidget {
               if (isMyProfile)
                 Column(
                   children: [
-                    ElevatedButton(
+                    // ✅ Nút chỉnh sửa Travel Map — nền cam, chữ trắng, bo viền
+                    OutlinedButton(
                       onPressed: () {},
-                      style: ElevatedButton.styleFrom(
+                      style: OutlinedButton.styleFrom(
                         backgroundColor: Colors.orange,
+                        side: const BorderSide(color: Colors.orangeAccent),
                         minimumSize: const Size(double.infinity, 40),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
                       ),
-                      child: const Text('Chỉnh sửa Travel Map'),
+                      child: const Text(
+                        'Chỉnh sửa Travel Map',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 8),
+
+                    // ✅ Hai nút Viết bài & Check-in — nền cam, chữ trắng, bo viền
                     Row(
                       children: [
                         Expanded(
@@ -160,8 +173,23 @@ class ProfileHeader extends StatelessWidget {
                                 ),
                               );
                             },
-                            icon: const Icon(Icons.edit),
-                            label: const Text('Viết bài'),
+                            icon: const Icon(Icons.edit, color: Colors.white),
+                            label: const Text(
+                              'Viết bài',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              side: const BorderSide(
+                                color: Colors.orangeAccent,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -177,8 +205,26 @@ class ProfileHeader extends StatelessWidget {
                                 ),
                               );
                             },
-                            icon: const Icon(Icons.camera_alt_outlined),
-                            label: const Text('Check-in'),
+                            icon: const Icon(
+                              Icons.camera_alt_outlined,
+                              color: Colors.white,
+                            ),
+                            label: const Text(
+                              'Check-in',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              side: const BorderSide(
+                                color: Colors.orangeAccent,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
                           ),
                         ),
                       ],
