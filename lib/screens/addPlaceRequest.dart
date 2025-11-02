@@ -7,7 +7,7 @@ import 'package:image_picker/image_picker.dart'; // Cần cho chọn ảnh
 
 // Import file constants
 // !!! QUAN TRỌNG: Đảm bảo đường dẫn này đúng !!!
-import 'journey_map_constants.dart'; // <<< Sửa đường dẫn nếu cần
+import 'package:nhom_3_damh_lttbdd/constants/cityExchange.dart'; // <<< Sửa đường dẫn nếu cần
 
 // ⚡️ IMPORT CLOUDINARY SERVICE
 // !!! QUAN TRỌNG: Đảm bảo đường dẫn này đúng tới file service của bạn !!!
@@ -194,31 +194,52 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
 
       if (placemarks.isNotEmpty) {
         final Placemark place = placemarks.first;
-        _streetController.text = place.thoroughfare ?? ''; // Đường
-        _wardController.text =
-            place.subAdministrativeArea ?? ''; // Quận/Huyện gán vào Phường/Xã
 
-        // Logic khớp tên Tỉnh/Thành phố (Dùng kProvinceDisplayNames)
-        String fetchedCity = place.administrativeArea ?? '';
-        fetchedCity = fetchedCity
-            .replaceFirst('Thành phố ', '')
-            .replaceFirst('Tỉnh ', '');
+        // === THAY ĐỔI TẠI ĐÂY ===
+        // Nếu không lấy được tên đường, gán "Không xác định"
+        _streetController.text = place.thoroughfare ?? 'Không xác định';
 
-        String? matchedDisplayName;
-        for (var displayName in kProvinceDisplayNames.values) {
-          String normalizedDisplayName = displayName
-              .replaceFirst('TP. ', '')
-              .replaceFirst('TĐ. ', '');
-          if (normalizedDisplayName.toLowerCase() ==
-              fetchedCity.toLowerCase()) {
-            matchedDisplayName = displayName;
-            break;
-          }
+        // Nếu không lấy được quận/huyện, gán "Không xác định"
+        _wardController.text = place.subAdministrativeArea ?? 'Không xác định';
+        // ========================
+
+        // === Logic chuẩn hóa Tỉnh/Thành phố (Giữ nguyên) ===
+        String rawPlacemarkCity = place.administrativeArea ?? '';
+        String? mergedProvinceId = getMergedProvinceIdFromGeolocator(
+          rawPlacemarkCity,
+        );
+
+        if (mergedProvinceId != null) {
+          _selectedCity = formatProvinceIdToName(mergedProvinceId);
+        } else {
+          _selectedCity = null; // Vẫn để null để validator báo lỗi
+          print(
+            "Không thể khớp '$rawPlacemarkCity' với bất kỳ ID tỉnh/thành nào.",
+          );
+          _showSnackBar(
+            'Không thể tự động xác định Tỉnh/Thành phố hợp lệ ($rawPlacemarkCity).',
+            isError: true,
+          );
         }
-        _selectedCity = matchedDisplayName;
+        // ========================================================
+      } else {
+        // === THÊM MỚI: Xử lý trường hợp placemarks rỗng ===
+        _streetController.text = 'Không xác định';
+        _wardController.text = 'Không xác định';
+        _selectedCity = null; // Để validator báo lỗi
+        _showSnackBar(
+          'Không thể tìm thấy thông tin địa chỉ cho tọa độ này.',
+          isError: true,
+        );
+        // ==============================================
       }
     } catch (e) {
       print("Lỗi geocoding: $e");
+      // === THÊM MỚI: Xử lý khi có lỗi exception ===
+      _streetController.text = 'Không xác định';
+      _wardController.text = 'Không xác định';
+      _selectedCity = null;
+      // ===========================================
       _showSnackBar('Không thể tự động lấy địa chỉ: $e', isError: true);
     } finally {
       if (mounted) {

@@ -627,8 +627,11 @@ class _PostCardState extends State<PostCard> {
 
   // ✅ Toggle Like/Unlike (ĐÃ GỌI NOTIFICATION)
   Future<void> _toggleLike() async {
-    final currentUserId = widget.userId;
-    if (auth.FirebaseAuth.instance.currentUser == null) {
+    // 1. Lấy ID người dùng từ TRẠNG THÁI AUTH HIỆN TẠI
+    final currentUserId = auth.FirebaseAuth.instance.currentUser?.uid;
+
+    // 2. Kiểm tra xem user ID có null không
+    if (currentUserId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Bạn cần đăng nhập để thích bài viết!"),
