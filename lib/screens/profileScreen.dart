@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Thêm import này
 import 'package:nhom_3_damh_lttbdd/screens/settingAccountScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/accountSettingScreen.dart';
-import 'package:nhom_3_damh_lttbdd/screens/journeyMapScreen.dart';
+
+import 'package:nhom_3_damh_lttbdd/screens/journey_map/journeyMapScreen.dart';
 
 // --- BƯỚC 1: CHUYỂN THÀNH STATEFULWIDGET VÀ NHẬN userId ---
 class ProfileScreen extends StatefulWidget {

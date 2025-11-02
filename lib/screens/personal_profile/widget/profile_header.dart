@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'follow_button.dart';
 import 'package:nhom_3_damh_lttbdd/screens/accountSettingScreen.dart';
-import 'package:nhom_3_damh_lttbdd/screens/checkinScreen.dart';
+
+import 'package:nhom_3_damh_lttbdd/screens/add_checkins/checkinScreen.dart';
 import 'package:nhom_3_damh_lttbdd/model/post_model.dart';
 
 class ProfileHeader extends StatelessWidget {
