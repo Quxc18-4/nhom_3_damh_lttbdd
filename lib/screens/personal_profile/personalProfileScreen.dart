@@ -76,7 +76,7 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen>
         _currentUser = User.fromDoc(userDoc);
         final data = userDoc.data() as Map<String, dynamic>? ?? {};
 
-        // ✅ SỬA LỖI 2: Lưu dữ liệu thô (Map) vào biến state mới
+        // ✅  Lưu dữ liệu thô (Map) vào biến state mới
         _rawUserData = data;
 
         int followers = data['followersCount'] ?? 0;

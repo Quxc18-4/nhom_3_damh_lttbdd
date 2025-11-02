@@ -3,7 +3,7 @@ import 'package:convex_bottom_bar/convex_bottom_bar.dart';
 import 'package:nhom_3_damh_lttbdd/screens/profileScreen.dart';
 import 'package:nhom_3_damh_lttbdd/screens/exploreScreen.dart';
 import 'tripPlannerScreen.dart';
-import 'package:nhom_3_damh_lttbdd/screens/saveScreen.dart';
+import 'package:nhom_3_damh_lttbdd/screens/save_screen/saved_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
