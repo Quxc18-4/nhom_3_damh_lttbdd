@@ -22,19 +22,17 @@ import 'widget/add_place_widgets.dart';
 // - Dữ liệu đã chọn (categories, images)
 // - Trạng thái đang gửi (submitting)
 class AddPlaceScreen extends StatefulWidget {
-  // `final`: Thuộc tính của Widget luôn là `final`.
-
-  // `LatLng`: Màn hình này *phải* được truyền vào một tọa độ
-  // chính xác (từ màn hình bản đồ trước đó).
   final LatLng initialLatLng;
-
-  // `String`: Cần biết ai là người gửi yêu cầu.
   final String userId;
+
+  // 1. Thêm biến để nhận Service từ bên ngoài (cho test)
+  final AddPlaceService? service;
 
   const AddPlaceScreen({
     Key? key,
-    required this.initialLatLng, // `required` vì không thể null
-    required this.userId, // `required`
+    required this.initialLatLng,
+    required this.userId,
+    this.service, // 2. Thêm vào constructor
   }) : super(key: key);
 
   @override
@@ -43,14 +41,10 @@ class AddPlaceScreen extends StatefulWidget {
 
 // Lớp `_` (private) chứa State
 class _AddPlaceScreenState extends State<AddPlaceScreen> {
-  // `GlobalKey<FormState>`: Một "chìa khóa" đặc biệt
-  // để tương tác với `Form` widget.
-  // Nó cho phép chúng ta gọi `_formKey.currentState?.validate()`
-  // để kiểm tra tất cả `TextFormField` bên trong.
   final _formKey = GlobalKey<FormState>();
 
-  // Khởi tạo Service
-  final _service = AddPlaceService();
+  // 3. Đổi thành late final
+  late final AddPlaceService _service;
 
   // === KHAI BÁO BIẾN TRẠNG THÁI ===
 
@@ -100,10 +94,14 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
   final int _maxImages = 5;
 
   @override
-  // `initState`: Được gọi 1 lần duy nhất khi State được tạo.
   void initState() {
     super.initState();
-    _initializeData(); // Gọi hàm tải dữ liệu ban đầu
+    // 4. Logic: Nếu có service truyền vào (lúc test) thì dùng,
+    //    nếu không (lúc chạy thật) thì tự tạo mới.
+    _service = widget.service ?? AddPlaceService();
+
+    // ... code khởi tạo khác giữ nguyên
+    _initializeData();
   }
 
   // Gộp 2 hàm fetch ban đầu
