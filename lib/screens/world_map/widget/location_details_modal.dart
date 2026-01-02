@@ -141,12 +141,15 @@ class LocationDetailsModal extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min, // Co lại vừa đủ
                 children: [
                   // Nút Thêm mới
-                  if (isNewPlace) // Chỉ hiện khi là địa điểm mới
-                    _buildIconSheetButton(
-                      icon: Icons.add_location_alt_outlined,
-                      label: 'Thêm mới',
-                      color: Colors.blue,
-                      onTap: onAddPlace, // Gọi callback `onAddPlace`
+                  if (isNewPlace)
+                    Semantics(
+                      label: 'btn_add_new_place', // Gắn ID cho Appium
+                      child: _buildIconSheetButton(
+                        icon: Icons.add_location_alt_outlined,
+                        label: 'Thêm mới',
+                        color: Colors.blue,
+                        onTap: onAddPlace,
+                      ),
                     ),
                   if (isNewPlace) const SizedBox(width: 8),
 

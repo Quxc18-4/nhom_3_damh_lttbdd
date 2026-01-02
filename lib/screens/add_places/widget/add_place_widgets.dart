@@ -61,36 +61,17 @@ class CategoryChipsArea extends StatelessWidget {
           // Chỉ hiển thị nút này nếu số lượng đã chọn
           // chưa đạt tối đa.
           if (selectedCategories.length < maxCategories)
-            InkWell(
-              onTap: onAdd, // Khi bấm, gọi callback `onAdd` (của cha)
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                // (Đây là code UI tạo nút "Thêm" có dấu +)
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+            Semantics(
+              label: 'btn_add_category', // ID dùng cho Appium
+              child: ActionChip(
+                avatar: const Icon(Icons.add, size: 18, color: Colors.blue),
+                label: const Text('Thêm'),
+                onPressed: onAdd,
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: Colors.blue),
+                labelStyle: const TextStyle(color: Colors.blue),
+                shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.grey.shade400,
-                    style: BorderStyle.solid,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min, // Ngắn vừa đủ
-                  children: [
-                    Icon(Icons.add, size: 16, color: Colors.grey.shade700),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Thêm',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ),
@@ -166,64 +147,77 @@ class ImageSelectionArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(8),
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 1,
       ),
-      child: Wrap(
-        spacing: 8.0,
-        runSpacing: 8.0,
-        children: [
-          // 1. "Trải" các `_ImageThumbnail` ra
-          ...selectedImages
-              .map(
-                (imageFile) => _ImageThumbnail(
-                  imageFile: imageFile,
-                  onRemove: () => onRemove(imageFile),
-                ),
-              )
-              .toList(),
-          // 2. Hiển thị nút "Thêm ảnh" nếu còn chỗ
-          if (selectedImages.length < maxImages)
-            InkWell(
+      // Số lượng item = số ảnh đã chọn + 1 nút thêm (nếu chưa full)
+      itemCount:
+          selectedImages.length + (selectedImages.length < maxImages ? 1 : 0),
+      itemBuilder: (context, index) {
+        // Nếu index bằng độ dài list ảnh -> Đây là vị trí nút thêm
+        if (index == selectedImages.length) {
+          return Semantics(
+            label: 'btn_add_image', // ID dùng cho Appium
+            child: InkWell(
               onTap: onAdd,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
+              // Thay DottedBorder bằng Container có viền nét đứt giả lập (hoặc nét liền)
               child: Container(
-                width: 80,
-                height: 80,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.grey[100],
                   border: Border.all(
-                    color: Colors.grey.shade400,
-                    style: BorderStyle.solid,
-                  ),
+                    color: Colors.grey,
+                    width: 1,
+                  ), // Viền thường
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.add_photo_alternate_outlined,
-                      color: Colors.grey.shade600,
-                      size: 30,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Thêm ảnh',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade700,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
+                  children: const [
+                    Icon(Icons.camera_alt, color: Colors.grey, size: 32),
+                    SizedBox(height: 4),
+                    Text('Đăng ảnh', style: TextStyle(color: Colors.grey)),
                   ],
                 ),
               ),
             ),
-        ],
-      ),
+          );
+        }
+
+        // Hiển thị ảnh đã chọn
+        final file = selectedImages[index];
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.file(File(file.path), fit: BoxFit.cover),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: GestureDetector(
+                onTap: () => onRemove(file),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close, size: 14, color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

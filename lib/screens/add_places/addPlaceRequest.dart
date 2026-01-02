@@ -342,6 +342,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
   }
 
   // Hiển thị BottomSheet chọn Camera/Gallery
+  // Hiển thị BottomSheet chọn Camera/Gallery
   void _showImageSourceDialog() {
     showModalBottomSheet(
       context: context,
@@ -356,48 +357,60 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              OutlinedButton.icon(
-                icon: const Icon(
-                  Icons.photo_library_outlined,
-                  color: Colors.black87,
-                ),
-                onPressed: () =>
-                    _pickImage(ImageSource.gallery), // Gọi hàm trên
-                label: const Text(
-                  'Chọn từ thư viện',
-                  style: TextStyle(color: Colors.black87),
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  side: BorderSide(color: Colors.grey[300]!),
+              // --- 1. NÚT THƯ VIỆN (GẮN ID: btn_gallery) ---
+              Semantics(
+                label: 'btn_gallery', // ID cho Appium
+                child: OutlinedButton.icon(
+                  icon: const Icon(
+                    Icons.photo_library_outlined,
+                    color: Colors.black87,
+                  ),
+                  onPressed: () => _pickImage(ImageSource.gallery),
+                  label: const Text(
+                    'Chọn từ thư viện',
+                    style: TextStyle(color: Colors.black87),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: BorderSide(color: Colors.grey[300]!),
+                  ),
                 ),
               ),
+
               const SizedBox(height: 10),
-              OutlinedButton.icon(
-                icon: const Icon(
-                  Icons.camera_alt_outlined,
-                  color: Colors.black87,
-                ),
-                onPressed: () => _pickImage(ImageSource.camera), // Gọi hàm trên
-                label: const Text(
-                  'Chụp ảnh mới',
-                  style: TextStyle(color: Colors.black87),
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  side: BorderSide(color: Colors.grey[300]!),
+
+              // --- 2. NÚT CAMERA (GẮN ID: btn_camera) ---
+              Semantics(
+                label: 'btn_camera', // ID cho Appium
+                child: OutlinedButton.icon(
+                  icon: const Icon(
+                    Icons.camera_alt_outlined,
+                    color: Colors.black87,
+                  ),
+                  onPressed: () => _pickImage(ImageSource.camera),
+                  label: const Text(
+                    'Chụp ảnh mới',
+                    style: TextStyle(color: Colors.black87),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: BorderSide(color: Colors.grey[300]!),
+                  ),
                 ),
               ),
+
               const SizedBox(height: 20),
+
+              // Nút Hủy (Không cần ID cũng được, hoặc gắn btn_cancel nếu thích)
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Hủy'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.grey[200],
                   foregroundColor: Colors.black87,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
+                child: const Text('Hủy'),
               ),
             ],
           ),
@@ -470,26 +483,20 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
     }
   }
 
-  // === GIAO DIỆN (ĐÃ GỌI WIDGET MỚI) ===
   @override
   Widget build(BuildContext context) {
-    // Biến `bool` cục bộ: Nếu 1 trong 2 (hoặc cả 2) đang tải -> `true`
     bool isLoading = _isLoadingAddress || _isLoadingCategories;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Đăng ký địa điểm mới')),
-      // **Logic hiển thị chính:**
-      // Nếu `isLoading` -> Hiển thị spinner toàn màn hình
-      // Ngược lại -> Hiển thị `SingleChildScrollView` chứa `Form`
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Form(
-                // Bọc tất cả bằng `Form`
-                key: _formKey, // Gắn `key`
+                key: _formKey,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch, // Kéo dãn
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
                       'Thông tin địa điểm',
@@ -497,60 +504,54 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Tên địa điểm
-                    TextFormField(
-                      controller: _nameController, // Gắn controller
-                      decoration: const InputDecoration(
-                        labelText: 'Tên địa điểm *', // Dấu * cho biết bắt buộc
-                        border: OutlineInputBorder(),
-                        hintText: 'Nhập tên địa điểm',
+                    // 1. NHẬP TÊN (Đã thêm Semantics: input_name)
+                    Semantics(
+                      label: 'input_name',
+                      child: TextFormField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Tên địa điểm *',
+                          border: OutlineInputBorder(),
+                          hintText: 'Nhập tên địa điểm',
+                        ),
+                        validator: (value) => (value == null || value.isEmpty)
+                            ? 'Vui lòng nhập tên địa điểm'
+                            : null,
                       ),
-                      // `validator`: Được gọi bởi `_formKey.validate()`
-                      validator: (value) => (value == null || value.isEmpty)
-                          ? 'Vui lòng nhập tên địa điểm' // Trả về `String` (lỗi)
-                          : null, // Trả về `null` (hợp lệ)
                     ),
                     const SizedBox(height: 16),
 
-                    // Tỉnh/ Thành phố (KHÓA)
+                    // Tỉnh/ Thành phố (KHÓA - Không cần ID vì test không điền)
                     DropdownButtonFormField<String>(
-                      value: _selectedCity, // Giá trị được bind với state
+                      value: _selectedCity,
                       decoration: InputDecoration(
                         labelText: 'Tỉnh/ Thành phố *',
                         border: const OutlineInputBorder(),
                         filled: true,
-                        fillColor: Colors.grey[100], // Màu xám (bị khóa)
+                        fillColor: Colors.grey[100],
                       ),
-                      // `items`: Danh sách các lựa chọn
                       items:
-                          kProvinceDisplayNames
-                              .values // Lấy list tên hiển thị
+                          kProvinceDisplayNames.values
                               .map(
                                 (String d) => DropdownMenuItem<String>(
                                   value: d,
                                   child: Text(d),
                                 ),
                               )
-                              .toList() // Chuyển thành `List<DropdownMenuItem>`
-                            ..sort(
-                              (a, b) => a.value!.compareTo(b.value!),
-                            ), // Sắp xếp
-                      // `onChanged: null`: Đây là cách VÔ HIỆU HÓA
-                      // (disable) `DropdownButton`. Người dùng
-                      // không thể bấm chọn, chỉ có thể xem.
+                              .toList()
+                            ..sort((a, b) => a.value!.compareTo(b.value!)),
                       onChanged: null,
-
                       validator: (v) => v == null
                           ? 'Không thể xác định Tỉnh/Thành phố'
                           : null,
-                      isExpanded: true, // Cho text chiếm hết chiều ngang
+                      isExpanded: true,
                     ),
                     const SizedBox(height: 16),
 
                     // Phường/Xã (KHÓA)
                     TextFormField(
                       controller: _wardController,
-                      readOnly: true, // Khóa, không cho sửa
+                      readOnly: true,
                       decoration: InputDecoration(
                         labelText: 'Phường/Xã (Tạm)',
                         border: const OutlineInputBorder(),
@@ -564,7 +565,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                     // Đường (KHÓA)
                     TextFormField(
                       controller: _streetController,
-                      readOnly: true, // Khóa
+                      readOnly: true,
                       decoration: InputDecoration(
                         labelText: 'Đường *',
                         border: const OutlineInputBorder(),
@@ -578,57 +579,46 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Ghi chú
-                    TextFormField(
-                      controller: _notesController,
-                      decoration: const InputDecoration(
-                        labelText: 'Ghi chú (Mô tả ban đầu)',
-                        border: OutlineInputBorder(),
-                        hintText: 'Thêm ghi chú cá nhân hoặc mô tả...',
+                    // 2. NHẬP GHI CHÚ (Đã thêm Semantics: input_note)
+                    Semantics(
+                      label: 'input_note',
+                      child: TextFormField(
+                        controller: _notesController,
+                        decoration: const InputDecoration(
+                          labelText: 'Ghi chú (Mô tả ban đầu)',
+                          border: OutlineInputBorder(),
+                          hintText: 'Thêm ghi chú cá nhân hoặc mô tả...',
+                        ),
+                        maxLines: 3,
                       ),
-                      maxLines: 3,
                     ),
                     const SizedBox(height: 16),
 
-                    // === PHẦN DANH MỤC (DÙNG WIDGET MỚI) ===
+                    // === PHẦN DANH MỤC ===
                     Text(
                       'Danh mục * (${_selectedCategories.length}/$_maxCategories)',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
-                    // Gọi widget con (từ file `add_place_widgets.dart`)
                     CategoryChipsArea(
-                      // **Truyền Dữ liệu (State) xuống:**
                       selectedCategories: _selectedCategories,
                       maxCategories: _maxCategories,
-
-                      // **Truyền Hàm (Callback) xuống:**
-                      // Khi `CategoryChipsArea` gọi `onAdd` (bấm nút "Thêm")...
-                      onAdd:
-                          _showCategoryDialog, // ...nó sẽ thực thi hàm `_showCategoryDialog` (của State này).
-                      // Khi `CategoryChipsArea` gọi `onRemove(category)`...
-                      onRemove:
-                          _removeCategory, // ...nó sẽ thực thi hàm `_removeCategory` (của State này).
+                      onAdd: _showCategoryDialog,
+                      onRemove: _removeCategory,
                     ),
                     const SizedBox(height: 16),
 
-                    // === PHẦN HÌNH ẢNH (DÙNG WIDGET MỚI) ===
+                    // === PHẦN HÌNH ẢNH ===
                     Text(
                       'Hình ảnh (${_selectedImages.length}/$_maxImages)',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
-                    // Tương tự, gọi widget con
                     ImageSelectionArea(
-                      // Truyền state
                       selectedImages: _selectedImages,
                       maxImages: _maxImages,
-
-                      // Truyền callback
                       onAdd: _showImageSourceDialog,
                       onRemove: (file) {
-                        // Logic xóa được định nghĩa ngay tại đây
-                        // (vì nó ngắn gọn) và gọi `setState`.
                         setState(() {
                           _selectedImages.removeWhere(
                             (f) => f.path == file.path,
@@ -638,29 +628,27 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Nút Gửi
-                    ElevatedButton(
-                      // `onPressed` sẽ là `null` nếu `_isSubmitting` là `true`.
-                      // `onPressed: null` sẽ tự động vô hiệu hóa nút.
-                      onPressed: _isSubmitting ? null : _submitForm,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: Colors.orange,
-                        foregroundColor: Colors.white,
+                    // 3. NÚT GỬI (Đã thêm Semantics: btn_submit)
+                    Semantics(
+                      label: 'btn_submit',
+                      child: ElevatedButton(
+                        onPressed: _isSubmitting ? null : _submitForm,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: _isSubmitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 3,
+                                ),
+                              )
+                            : const Text('GỬI YÊU CẦU'),
                       ),
-                      // **Logic thay đổi `child` của nút:**
-                      // Nếu `_isSubmitting` là `true` -> Hiển thị spinner
-                      // Ngược lại -> Hiển thị Text
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 3,
-                              ),
-                            )
-                          : const Text('GỬI YÊU CẦU'),
                     ),
                   ],
                 ),
