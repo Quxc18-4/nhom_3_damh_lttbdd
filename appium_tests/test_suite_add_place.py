@@ -451,6 +451,13 @@ try:
         #             print(f"     ⚠️ Lỗi thêm ảnh lần {i+1}: {e}")
         #             driver.back() # Đóng bottom sheet nếu lỗi -- CODE CŨ 
 
+        try: driver.hide_keyboard()
+        except: pass
+        try:
+            driver.find_element(AppiumBy.ANDROID_UIAUTOMATOR, 'new UiScrollable(new UiSelector().scrollable(true)).scrollForward()')
+            time.sleep(0.5)
+        except: pass
+
         # --- C. CHỌN DANH MỤC (SỬA LẠI: DÙNG ID RIÊNG BIỆT) ---
         if case['categories']:
             print(f"   -> [Step] Chọn {len(case['categories'])} danh mục")
@@ -499,263 +506,204 @@ try:
             time.sleep(0.5)
         except: pass
 
+        # --- D. THÊM ẢNH (REFACTORED) ---
+        # 1. Scroll xuống
+        try: driver.hide_keyboard()
+        except: pass
+        try:
+            driver.find_element(AppiumBy.ANDROID_UIAUTOMATOR, 'new UiScrollable(new UiSelector().scrollable(true)).scrollForward()')
+            time.sleep(0.5)
+        except: pass
+
         if case['img_count'] > 0:
             print(f"   -> [Step] Thêm {case['img_count']} ảnh (Nguồn: {case['img_source']})")
-            for i in range(case['img_count']):
+            
+            # Logic: Library chỉ chạy 1 lần chọn n ảnh. Camera chạy n lần.
+            # [FIX] LẤY KÍCH THƯỚC MÀN HÌNH TẠI CHỖ (Tránh lỗi 'w_scr not defined')
+            size = driver.get_window_size()
+            w_scr = size['width']
+            h_scr = size['height']
+            
+            loop_range = range(case['img_count'])
+            if case['img_source'] == "library": 
+                loop_range = range(1) 
+            
+            for i in loop_range:
                 try:
-                    # BƯỚC 1: CLICK NÚT "THÊM ẢNH" (Dùng ID riêng: btn_add_image)
+                    # BƯỚC 1: MỞ BOTTOM SHEET
+                    # Tìm nút thêm ảnh (có thể đã ẩn nếu full)
                     try:
-                        driver.find_element(AppiumBy.ACCESSIBILITY_ID, "btn_add_image").click()
+                        btn_add = None
+                        try: btn_add = driver.find_element(AppiumBy.ACCESSIBILITY_ID, "btn_add_image")
+                        except: btn_add = driver.find_element(AppiumBy.XPATH, "(//*[contains(@content-desc, 'Đăng ảnh') or contains(@text, 'Đăng ảnh') or contains(@content-desc, 'Thêm')])[last()]")
+                        
+                        print(f"     -> [Lần {i+1}] Click nút Thêm ảnh...")
+                        btn_add.click()
+                        time.sleep(2)
                     except:
-                        # Fallback: Tìm nút Thêm nằm dưới cùng (vì nút thêm danh mục ở trên)
-                        xpath_img_add = "(//*[contains(@content-desc, 'Đăng ảnh') or contains(@text, 'Đăng ảnh')])[last()]"
-                        driver.find_element(AppiumBy.XPATH, xpath_img_add).click()
+                        if i > 0: 
+                            print("     ℹ️ Nút thêm ảnh đã ẩn (Có thể đã đủ số lượng).")
+                            break
+                        else:
+                            raise Exception("Không tìm thấy nút Thêm ảnh ngay lần đầu!")
 
-                    print("     -> Đã click nút Thêm ảnh. Đang chờ BottomSheet...")
-                    time.sleep(3) # [QUAN TRỌNG] Tăng thời gian chờ Bottom Sheet hiện lên
-
-                    # BƯỚC 2: CHỌN NGUỒN (CAMERA / LIBRARY)
+                    # BƯỚC 2: CHỌN NGUỒN
                     src = "camera"
-                    if case['img_source'] == "library" or (case['img_source'] == "mixed" and i > 0): 
+                    if case['img_source'] == "library" or (case['img_source'] == "mixed" and i > 0):
                         src = "library"
 
                     if src == "camera":
-                        print("     -> Chọn nguồn: Camera...")
-                        try:
-                            driver.find_element(AppiumBy.ACCESSIBILITY_ID, "btn_camera").click()
-                        except:
-                            driver.find_element(AppiumBy.XPATH, "//*[contains(@text, 'Chụp') or contains(@content-desc, 'Chụp') or contains(@text, 'Camera')]").click()
-                        
-                        # Gọi hàm xử lý Camera
+                        print("     -> Chọn Camera...")
+                        try: driver.find_element(AppiumBy.ACCESSIBILITY_ID, "btn_camera").click()
+                        except: driver.find_element(AppiumBy.XPATH, "//*[contains(@text, 'Chụp')]").click()
                         handle_camera_coordinates(driver)
                     
                     else:
                         print("     -> Chọn Thư viện...")
-                        # 1. Click nút Thư viện (Tọa độ mù - BottomSheet)
-                        size = driver.get_window_size()
-                        w = size['width']
-                        h = size['height']
-                        
-                        # Click vào nút "Chọn từ thư viện" (Khoảng 78% chiều cao)
-                        action = ActionChains(driver)
-                        finger = PointerInput(interaction.POINTER_TOUCH, "finger")
-                        action.w3c_actions = ActionBuilder(driver, mouse=finger)
-                        action.w3c_actions.pointer_action.move_to_location(int(w * 0.5), int(h * 0.78))
-                        action.w3c_actions.pointer_action.pointer_down()
-                        action.w3c_actions.pointer_action.pause(0.2)
-                        action.w3c_actions.pointer_action.pointer_up()
-                        action.perform()
+                        # 1. Click nút "Thư viện" (Tọa độ 78% chiều cao - Fix lỗi ID)
+                        tap_point(driver, w_scr * 0.5, h_scr * 0.78)
 
                         # 2. Check Quyền & Chờ Load
                         time.sleep(3)
                         try: driver.find_element(AppiumBy.XPATH, "//*[contains(@text, 'Cho phép') or contains(@text, 'Allow')]").click()
                         except: pass
-                        time.sleep(4) # Chờ ảnh load
+                        time.sleep(4)
 
-                        # 3. CLICK CHỌN ẢNH THEO LƯỚI (DỰA TRÊN ẢNH BẠN GỬI)
-                        # Danh sách tọa độ 6 ảnh (Tương đối theo %)
-                        # Ảnh 1: (16%, 55%), Ảnh 2: (50%, 55%), Ảnh 3: (83%, 55%)
-                        # Ảnh 4: (16%, 75%), Ảnh 5: (50%, 75%), Ảnh 6: (83%, 75%)
+                        # 3. CHỌN ẢNH (Logic chọn nhiều ảnh theo lưới)
                         img_coords = [
                             (0.16, 0.55), (0.50, 0.55), (0.83, 0.55),
                             (0.16, 0.75), (0.50, 0.75), (0.83, 0.75)
                         ]
                         
-                        # Số lượng cần chọn
                         count_to_pick = case['img_count']
-                        if case['img_source'] == "mixed": count_to_pick = 1 # Nếu mixed thì lần này chỉ chọn 1
-                        
-                        # Giới hạn max 6 ảnh theo tọa độ có sẵn
+                        if case['img_source'] == "mixed": count_to_pick = 1 
                         if count_to_pick > 6: count_to_pick = 6
                         
                         print(f"     -> Đang chọn {count_to_pick} ảnh...")
-                        
-                        action = ActionChains(driver)
-                        action.w3c_actions = ActionBuilder(driver, mouse=finger)
-
                         for idx in range(count_to_pick):
                             cx, cy = img_coords[idx]
                             print(f"        -> Click ảnh {idx+1}...")
-                            # Gọi hàm tap riêng biệt (Fix lỗi W3C)
-                            tap_point(driver, w * cx, h * cy)
-                            # QUAN TRỌNG: Nghỉ 1s giữa các lần click để UI kịp phản hồi (dấu tick xanh)
-                            time.sleep(1)
+                            tap_point(driver, w_scr * cx, h_scr * cy)
+                            time.sleep(1) # Nghỉ giữa các click
                         
-                        action.perform() # Thực thi chuỗi click ảnh
-                        
-                        # 4. CLICK NÚT DONE (HOÀN TẤT)
-                        # Vị trí nút Done: Góc phải dưới (85%, 90%)
-                        print("     -> Click nút Done (Góc phải dưới)...")
-                        time.sleep(1)
-                        action = ActionChains(driver) # Reset action mới
-                        action.w3c_actions = ActionBuilder(driver, mouse=finger)
-                        
-                        action.w3c_actions.pointer_action.move_to_location(int(w * 0.85), int(h * 0.90))
-                        action.w3c_actions.pointer_action.pointer_down()
-                        action.w3c_actions.pointer_action.pause(0.2)
-                        action.w3c_actions.pointer_action.pointer_up()
-                        action.perform()
-                        
+                        # 4. Click Done
+                        print("     -> Click nút Done...")
+                        tap_point(driver, w_scr * 0.85, h_scr * 0.90)
                         print("     -> Đã xong phần thư viện.")
-                        time.sleep(3)
-
-                        # --- [MỚI] CHECK SNACKBAR GIỚI HẠN ẢNH (CHO CASE DDD10) ---
-                        # Logic: Nếu chọn quá 5 ảnh, App sẽ hiện thông báo ngay lúc này
+                        time.sleep(2)
+                        
+                        # --- [MỚI] CHECK SNACKBAR GIỚI HẠN ẢNH (DDD10) ---
                         if case['id'] == "DDD10" or case['img_count'] > 5:
-                            print("     ℹ️ Đang check thông báo giới hạn ảnh...")
                             try:
-                                # Text mẫu: "Đã đạt giới hạn 5 ảnh"
                                 limit_msg = "Đã đạt giới hạn"
                                 xpath_limit = f"//*[contains(@text, '{limit_msg}') or contains(@content-desc, '{limit_msg}')]"
                                 driver.find_element(AppiumBy.XPATH, xpath_limit)
-                                print(f"     ✅ PASSED: Bắt được thông báo giới hạn: '{limit_msg}'")
-                            except:
-                                print(f"     ⚠️ WARNING: Không bắt được thông báo giới hạn '{limit_msg}' (Có thể ẩn quá nhanh).")
-                        
-                        time.sleep(2)
+                                print(f"     ✅ PASSED: Bắt được thông báo: '{limit_msg}'")
+                            except: 
+                                print(f"     ⚠️ WARNING: Không bắt được thông báo giới hạn.")
 
                 except Exception as e:
-                    print(f"     ⚠️ Lỗi thêm ảnh: {e}")
-                    driver.back() # Đóng sheet
+                    print(f"     ⚠️ Lỗi thao tác ảnh: {e}")
+                    # Chỉ Back nếu không phải lỗi tìm nút Add
+                    if "Không tìm thấy nút Thêm ảnh" not in str(e):
+                        driver.back()
                     time.sleep(1)
 
-        # --- E. GỬI YÊU CẦU ---
-        # --- E. GỬI YÊU CẦU & CHECK SNACKBAR ---
+        # --- E. GỬI YÊU CẦU & CHECK KẾT QUẢ ---
         print("   -> [Step] Nhấn Gửi...")
         try: driver.hide_keyboard()
         except: pass
-        time.sleep(5)
+        time.sleep(2)
+
+        # [FIX] SCROLL XUỐNG ĐÁY (ĐỂ TÌM NÚT GỬI KHI CÓ NHIỀU ẢNH)
+        print("     -> Cuộn xuống đáy để tìm nút Gửi...")
+        try:
+            driver.find_element(AppiumBy.ANDROID_UIAUTOMATOR, 'new UiScrollable(new UiSelector().scrollable(true)).scrollToEnd(3)')
+            time.sleep(1)
+        except: pass
 
         # 1. Nhấn nút Gửi
         try:
             driver.find_element(AppiumBy.XPATH, "//*[contains(@text, 'GỬI YÊU CẦU') or contains(@content-desc, 'GỬI YÊU CẦU')]").click()
         except:
-            print("     ⚠️ Không tìm thấy nút Gửi (Thử scroll xuống hoặc click tọa độ)...")
-            # Click tọa độ mù ở đáy màn hình nếu không thấy nút
-            size = driver.get_window_size()
-            action = ActionChains(driver)
-            finger = PointerInput(interaction.POINTER_TOUCH, "finger")
-            action.w3c_actions = ActionBuilder(driver, mouse=finger)
-            action.w3c_actions.pointer_action.move_to_location(int(size['width'] * 0.5), int(size['height'] * 0.9))
-            action.w3c_actions.pointer_action.pointer_down()
-            action.w3c_actions.pointer_action.pointer_up()
-            action.perform()
+            print("     ⚠️ Không tìm thấy nút Gửi (Thử click tọa độ đáy)...")
+            tap_point(driver, w_scr * 0.5, h_scr * 0.9)
 
-        # 2. KIỂM TRA KẾT QUẢ (VERIFY)
-        # 2. KIỂM TRA TRẠNG THÁI FORM (Dựa trên TIÊU ĐỀ - An toàn hơn nút Gửi)
+        # 2. KIỂM TRA TRẠNG THÁI FORM
         print("   -> [Verify] Đang kiểm tra trạng thái màn hình...")
-        time.sleep(1.5) # Chờ animation/snackbar
+        time.sleep(2)
 
-        # Kiểm tra xem có đang ở Form không? (Tìm tiêu đề trên cùng)
         is_on_form = False
         try:
-            # Tìm tiêu đề đặc trưng: "Thông tin địa điểm" hoặc "Đăng ký địa điểm mới"
-            # Tiêu đề này nằm trên cùng, không bao giờ bị bàn phím che
             xpath_title = "//*[contains(@text, 'Thông tin địa điểm') or contains(@text, 'Đăng ký địa điểm') or contains(@content-desc, 'Thông tin địa điểm')]"
             driver.find_element(AppiumBy.XPATH, xpath_title)
             is_on_form = True
-            print("     -> Trạng thái: VẪN Ở FORM (Tìm thấy tiêu đề).")
+            print("     -> Trạng thái: VẪN Ở FORM.")
         except:
             is_on_form = False
 
-        # --- LOGIC CHO NEGATIVE CASE (DDD01, DDD05) ---
+        # --- LOGIC NEGATIVE (MONG ĐỢI BỊ CHẶN) ---
         if case['expect_pass'] == False:
             print(f"     ℹ️ Case {case['id']} mong đợi BỊ CHẶN (Negative).")
-
-            # Check SnackBar/Error Message
-            # Tìm bất kỳ text nào chứa "Vui lòng" hoặc "bắt buộc"
-            error_msg_found = False
+            # Check lỗi Validation
             try:
                 xpath_err = "//*[contains(@text, 'Vui lòng') or contains(@text, 'bắt buộc') or contains(@content-desc, 'Vui lòng')]"
                 el = driver.find_element(AppiumBy.XPATH, xpath_err)
-                print(f"     ✅ PASSED: Bắt được thông báo lỗi: '{el.text if el.text else el.get_attribute('content-desc')}'")
-                error_msg_found = True
-            except:
-                print(f"     ⚠️ WARNING: Không bắt được text lỗi cụ thể.")
-                # [DEBUG QUAN TRỌNG] Nếu không thấy lỗi, in source ra để soi
-                # print("     [DEBUG SOURCE]:", driver.page_source[:500]) # In 500 ký tự đầu
+                print(f"     ✅ PASSED: Bắt được lỗi: '{el.text if el.text else el.get_attribute('content-desc')}'")
+            except: pass
 
-            # ĐÁNH GIÁ KẾT QUẢ
             if is_on_form:
-                # Chỉ cần Vẫn ở Form là coi như Pass (Hệ thống đã chặn việc chuyển trang)
-                print("     ✅ KẾT QUẢ: PASSED (Hệ thống chặn thành công, vẫn ở Form).")
-                
-                # CLEANUP: Vì đang ở Form nên PHẢI BACK
-                print("     -> [Action] Đang ở Form -> Bấm Back để về Map...")
+                print("     ✅ KẾT QUẢ: PASSED (Hệ thống chặn thành công).")
+                print("     -> [Action] Back thoát Form...")
                 driver.back()
                 time.sleep(1.5)
-                try: 
-                    # Xử lý popup hủy "Bạn có chắc muốn thoát?"
-                    driver.find_element(AppiumBy.XPATH, "//*[contains(@text, 'Đồng ý') or contains(@text, 'Thoát') or contains(@text, 'Hủy') or contains(@text, 'Discard')]").click()
-                    print("     -> Đã xác nhận popup Hủy.")
+                try: driver.find_element(AppiumBy.XPATH, "//*[contains(@text, 'Đồng ý') or contains(@text, 'Thoát') or contains(@text, 'Hủy')]").click()
                 except: pass
             else:
-                print("     ❌ FAILED: Đã thoát Form (Lỗi hệ thống - Đã gửi thành công sai quy định).")
+                print("     ❌ FAILED: Đã thoát Form (Lỗi hệ thống).")
 
-
-        # --- LOGIC CHO POSITIVE CASE (CÁC CASE CÒN LẠI) ---
+        # --- LOGIC POSITIVE (MONG ĐỢI THÀNH CÔNG) ---
         else:
             print("     ℹ️ Case mong đợi THÀNH CÔNG (Positive).")
             
-            # Text mong đợi: "Đã gửi yêu cầu chờ duyệt!"
             success_msg = "Đã gửi yêu cầu chờ duyệt"
-            # Text lỗi upload ảnh (Cloudinary...)
             upload_error_msg = "Không thể tải ảnh" 
             
             is_success = False
             is_upload_error = False
 
-            # Chờ và Check các loại thông báo
-            # Vì ta không biết nó hiện cái nào trước, ta check tuần tự
+            # Check thông báo
             try:
-                # 1. Tìm thông báo Thành công
                 xpath_success = f"//*[contains(@text, '{success_msg}') or contains(@content-desc, '{success_msg}')]"
                 driver.find_element(AppiumBy.XPATH, xpath_success)
-                print(f"     ✅ PASSED: Bắt được thông báo thành công: '{success_msg}'")
+                print(f"     ✅ PASSED: Bắt được thông báo: '{success_msg}'")
                 is_success = True
             except:
-                # 2. Nếu không thấy thành công -> Tìm thông báo Lỗi Upload
                 try:
-                    xpath_upload_err = f"//*[contains(@text, '{upload_error_msg}') or contains(@content-desc, '{upload_error_msg}')]"
-                    driver.find_element(AppiumBy.XPATH, xpath_upload_err)
+                    xpath_err = f"//*[contains(@text, '{upload_error_msg}') or contains(@content-desc, '{upload_error_msg}')]"
+                    driver.find_element(AppiumBy.XPATH, xpath_err)
                     print(f"     ⚠️ WARNING: Gặp lỗi Upload ảnh: '{upload_error_msg}'")
                     is_upload_error = True
-                except:
-                    print("     ⚠️ WARNING: Không bắt được SnackBar nào (Có thể ẩn quá nhanh).")
+                except: pass
 
-            # XỬ LÝ HẬU KỲ
-            time.sleep(2) 
+            time.sleep(1)
 
             if is_upload_error:
-                # TRƯỜNG HỢP LỖI UPLOAD: Bấm Back 1 lần như yêu cầu
-                print("     -> [Action] Lỗi Upload -> Bấm Back để thoát Form...")
+                print("     -> [Action] Lỗi Upload -> Bấm Back thoát Form...")
                 driver.back()
                 time.sleep(1)
-                # Nếu có popup "Hủy?" thì bấm Đồng ý luôn để thoát hẳn
                 try: driver.find_element(AppiumBy.XPATH, "//*[contains(@text, 'Đồng ý')]").click()
                 except: pass
-                
-            elif is_success:
-                # TRƯỜNG HỢP THÀNH CÔNG: Check xem về Map chưa
-                time.sleep(2)
-                try:
-                    driver.find_element(AppiumBy.ACCESSIBILITY_ID, "btn_add_new_place")
-                    print("     ✅ KẾT QUẢ: PASSED TUYỆT ĐỐI (Về Map thành công).")
-                except:
-                    print("     ✅ KẾT QUẢ: PASSED (Đã hiện thông báo, đang về Map).")
-            
+            elif not is_on_form:
+                print("     ✅ KẾT QUẢ: PASSED (Đã về Map).")
             else:
-                # TRƯỜNG HỢP KHÔNG RÕ RÀNG (Không thấy thông báo gì)
-                # Check xem đang ở đâu
-                try:
-                    driver.find_element(AppiumBy.ACCESSIBILITY_ID, "btn_add_new_place")
-                    print("     ✅ KẾT QUẢ: PASSED (Đã về Map - Dù không bắt được thông báo).")
-                except:
-                    # Vẫn kẹt ở Form
-                    print("     ❌ KẾT QUẢ: FAILED (Kẹt ở Form, không thấy thông báo).")
-                    driver.back()
-                    try: driver.find_element(AppiumBy.XPATH, "//*[contains(@text, 'Đồng ý')]").click()
-                    except: pass
+                print("     ❌ KẾT QUẢ: FAILED (Kẹt ở Form, không thấy thông báo).")
+                #driver.back()
+                try: driver.find_element(AppiumBy.XPATH, "//*[contains(@text, 'Đồng ý')]").click()
+                except: pass
+
+        print("--------------------------------------------------")
+        time.sleep(3)
 
             # 2. KIỂM TRA ĐÃ VỀ MAP CHƯA
             #time.sleep(3) # Chờ app tự động đóng form và về map
@@ -777,9 +725,6 @@ try:
             #     time.sleep(1)
             #     try: driver.find_element(AppiumBy.XPATH, "//*[contains(@text, 'Đồng ý') or contains(@text, 'Thoát')]").click()
             #     except: pass
-
-        print("--------------------------------------------------")
-        time.sleep(3) # Nghỉ trước khi qua case mới
         
 except Exception as e:
     print(f"🔥 ERROR: {e}")
