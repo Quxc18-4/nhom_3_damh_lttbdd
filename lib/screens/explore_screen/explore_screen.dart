@@ -209,6 +209,7 @@ class _ExploreScreenState extends State<ExploreScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: const Key('explore_screen'), // Thêm key để test
       backgroundColor: Colors.grey[100],
       body: Column(
         children: [
@@ -243,8 +244,10 @@ class _ExploreScreenState extends State<ExploreScreen>
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        key: const Key('create_post_fab'), // Thêm key để test
         onPressed: _showCreatePostOptions, // Click FAB → tạo bài viết
         backgroundColor: Colors.orange,
+        tooltip: 'CreatePostFAB',
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );

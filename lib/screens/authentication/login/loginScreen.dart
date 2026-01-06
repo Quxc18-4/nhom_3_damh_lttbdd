@@ -375,22 +375,27 @@ class _LoginScreenState extends State<LoginScreen> {
                     borderRadius: BorderRadius.circular(25),
                     border: Border.all(color: Colors.orange[300]!),
                   ),
-                  child: TextField(
-                    controller: _emailController,
-                    decoration: InputDecoration(
-                      hintText: 'Email hoặc số điện thoại của bạn',
-                      hintStyle: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 14,
-                      ),
-                      prefixIcon: Icon(
-                        Icons.email_outlined,
-                        color: Colors.grey[600],
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 16,
+                  child: Semantics(
+                    label: 'login_email', // Appium Python sẽ tìm theo nhãn này
+                    container: true,
+                    child: TextField(
+                      key: const Key('login_email'),
+                      controller: _emailController,
+                      decoration: InputDecoration(
+                        hintText: 'Email hoặc số điện thoại của bạn',
+                        hintStyle: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 14,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.email_outlined,
+                          color: Colors.grey[600],
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
                       ),
                     ),
                   ),
@@ -414,36 +419,40 @@ class _LoginScreenState extends State<LoginScreen> {
                     borderRadius: BorderRadius.circular(25),
                     border: Border.all(color: Colors.orange[300]!),
                   ),
-                  child: TextField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      hintText: 'Nhập mật khẩu của bạn',
-                      hintStyle: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 14,
-                      ),
-                      prefixIcon: Icon(
-                        Icons.lock_outline,
-                        color: Colors.grey[600],
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
+                  child: Semantics(
+                    label:
+                        'login_password', // Appium Python sẽ tìm theo nhãn này
+                    container: true,
+                    child: TextField(
+                      key: const Key('login_password'),
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      decoration: InputDecoration(
+                        hintText: 'Nhập mật khẩu của bạn',
+                        hintStyle: TextStyle(
                           color: Colors.grey[400],
+                          fontSize: 14,
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 16,
+                        prefixIcon: Icon(
+                          Icons.lock_outline,
+                          color: Colors.grey[600],
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: Colors.grey[400],
+                          ),
+                          onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
                       ),
                     ),
                   ),
@@ -452,30 +461,35 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 24),
 
                 /// Login Button
-                ElevatedButton(
-                  onPressed: _loginUser,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange[400],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Đăng nhập',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
+                Semantics(
+                  label: 'login_button', // Appium Python sẽ tìm theo nhãn này
+                  button: true,
+                  child: ElevatedButton(
+                    key: const Key('login_button'),
+                    onPressed: _loginUser,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange[400],
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
                       ),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward, size: 20),
-                    ],
+                      elevation: 0,
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Đăng nhập',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(Icons.arrow_forward, size: 20),
+                      ],
+                    ),
                   ),
                 ),
 

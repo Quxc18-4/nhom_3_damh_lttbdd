@@ -24,6 +24,10 @@ Future<void> main() async {
   }
   // *****************************************************************
 
+  runMyApp();
+}
+
+void runMyApp() {
   runApp(const MyApp());
 }
 

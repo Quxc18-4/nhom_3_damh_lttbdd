@@ -6,7 +6,6 @@ import 'package:flutter_map/flutter_map.dart'; // Import thư viện bản đồ
 import 'package:latlong2/latlong.dart'; // Import thư viện hỗ trợ kiểu LatLng cho flutter_map
 import 'package:geocoding/geocoding.dart'; // Bạn có import nhưng chưa dùng trong file này
 import 'package:nhom_3_damh_lttbdd/constants/cityExchange.dart'; // Bạn có import nhưng chưa dùng trong file này
-
 // Import service để tải places
 import '../service/checkin_service.dart'; // Cần service để gọi hàm `fetchAllPlaces`
 
@@ -23,7 +22,6 @@ class MiniMapPicker extends StatefulWidget {
   // Đây là cơ chế `callback` để "bắn" dữ liệu (địa điểm đã chọn)
   // ra cho widget cha (CheckinScreen).
   final Function(DocumentSnapshot) onPlaceSelected;
-
   // `ScrollController`:
   // Cần nhận `ScrollController` từ `DraggableScrollableSheet`
   // để khi người dùng cuộn (scroll) `ListView` kết quả tìm kiếm,
@@ -64,6 +62,7 @@ class _MiniMapPickerState extends State<MiniMapPicker> {
   // `List<DocumentSnapshot>`:
   // `_filteredPlaces`: Lưu danh sách địa điểm *sau khi lọc* (filter)
   // bằng `_searchText`. `ListView` sẽ hiển thị danh sách này.
+
   List<DocumentSnapshot> _filteredPlaces = [];
 
   // Controller cho ô `TextField` tìm kiếm.
@@ -369,6 +368,7 @@ class _MiniMapPickerState extends State<MiniMapPicker> {
                           location['fullAddress'] ?? 'Không địa chỉ';
 
                       return ListTile(
+                        key: Key('place_item_$index'), // Thêm key để test
                         leading: const Icon(
                           Icons.location_pin,
                           color: Colors.blueAccent,

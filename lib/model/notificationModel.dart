@@ -24,7 +24,7 @@ class NotificationModel {
     required this.sender, // 🆕 Yêu cầu sender khi khởi tạo
   });
 
-  // Constructor factory đơn giản, chỉ lấy từ Firestore (không cần sender ở đây)
+  // Constructor factory đơn giản, chỉ lấy từ Firestore
   factory NotificationModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     final Timestamp timestamp = data['createdAt'] ?? Timestamp.now();

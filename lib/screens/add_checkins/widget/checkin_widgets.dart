@@ -63,6 +63,7 @@ class ImageSection extends StatelessWidget {
   Widget _buildAddImageButton(BuildContext context) {
     return InkWell(
       // `InkWell` để tạo hiệu ứng "splash" khi bấm
+      // key: const Key('btn_pick_image'),
       onTap:
           onAddImage, // Khi bấm -> gọi callback (hàm `_showImageSourceDialog` của CheckinScreen)
       child: Container(
@@ -101,6 +102,7 @@ class ImageSection extends StatelessWidget {
           // 1. Nút "Add" nhỏ (chỉ hiển thị nếu chưa đạt max)
           if (selectedImages.length < maxImages)
             InkWell(
+              key: const Key('btn_pick_image'), // Thêm key để test
               onTap: onAddImage, // Gọi callback `_showImageSourceDialog`
               child: Container(
                 width: 100,
@@ -182,6 +184,7 @@ class ImageItem extends StatelessWidget {
             // `File(imageFile.path)`: Chuyển đổi `XFile` -> `String` (path) -> `File`.
             child: Image.file(
               File(imageFile.path),
+              key: Key('image_preview_${imageFile.path}'), // Thêm key để test
               width: 100,
               height: 100,
               fit: BoxFit.cover, // Đảm bảo ảnh lấp đầy 100x100 (có thể bị cắt)
@@ -247,6 +250,7 @@ class JourneyContentSection extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
           ),
           child: TextField(
+            key: const Key('input_trip_title'), // Thêm key để test
             controller: titleController, // Gắn controller
             decoration: const InputDecoration(
               hintText: 'Tiêu đề chuyến đi',
@@ -263,6 +267,7 @@ class JourneyContentSection extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
           ),
           child: TextField(
+            key: const Key('input_trip_story'), // Thêm key để test
             controller: commentController, // Gắn controller
             maxLines: 5, // Cho phép nhập 5 dòng
             decoration: const InputDecoration(
@@ -354,6 +359,7 @@ class PlaceSection extends StatelessWidget {
               Expanded(
                 child: InkWell(
                   // Làm cho khu vực text có thể bấm được
+                  key: const Key('btn_pick_place'), // Thêm key để test
                   onTap: onShowMiniMap, // Gọi callback `_showMiniMapPicker`
                   child: Container(
                     color: Colors.transparent, // Đảm bảo bắt "tap" cả vùng
@@ -363,6 +369,7 @@ class PlaceSection extends StatelessWidget {
                       children: [
                         Text(
                           placeName,
+                          key: const Key('text_place_name'), // Thêm key để test
                           style: TextStyle(
                             // Đổi style text dựa trên trạng thái
                             fontWeight: hasSelectedPlace
@@ -380,6 +387,9 @@ class PlaceSection extends StatelessWidget {
                             padding: const EdgeInsets.only(top: 2.0),
                             child: Text(
                               placeAddress,
+                              key: const Key(
+                                'text_place_address',
+                              ), // Thêm key để test
                               style: TextStyle(
                                 color: Colors.grey[600],
                                 fontSize: 13,
@@ -410,6 +420,7 @@ class PlaceSection extends StatelessWidget {
               // Chỉ hiển thị nếu `hasSelectedPlace` là true
               if (hasSelectedPlace)
                 InkWell(
+                  key: const Key('btn_clear_place'), // Thêm key để test
                   onTap:
                       onClearPlace, // Gọi callback `setState(() => _selectedPlaceDoc = null)`
                   borderRadius: BorderRadius.circular(15),

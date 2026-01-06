@@ -9,6 +9,7 @@ import 'dart:io'; // Import dart:io để làm việc với 'File', mặc dù tr
 import 'service/checkin_service.dart'; // Import file service chứa logic nghiệp vụ (tải dữ liệu, upload ảnh...)
 import 'widget/checkin_widgets.dart'; // Import file chứa các Widget con đã được tách ra cho sạch sẽ
 import 'widget/mini_map_picker.dart'; // Import file chứa Widget chọn địa điểm trên bản đồ
+import '../../utils/mock_image_helper.dart'; // Import file helper để mock ảnh khi chọn camera trong môi trường test
 
 // Màu sắc (lấy từ file gốc)
 // Khai báo `const` (hằng số) vì giá trị này được biết tại thời điểm biên dịch (compile-time).
@@ -33,7 +34,6 @@ class CheckinScreen extends StatefulWidget {
   // 1. Mở từ một địa điểm cụ thể (có initialPlaceId)
   // 2. Mở tự do, không có địa điểm ban đầu (initialPlaceId = null)
   final String? initialPlaceId;
-
   // Constructor của Widget
   const CheckinScreen({
     super.key, // `key` giúp Flutter nhận diện và quản lý các Widget trong cây (widget tree)
@@ -165,6 +165,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
           backgroundColor: isError
               ? Colors.redAccent
               : null, // Hiển thị màu đỏ nếu là lỗi
+          duration: const Duration(seconds: 5), // Hiển thị trong 5 giây
         ),
       );
     }
@@ -239,93 +240,72 @@ class _CheckinScreenState extends State<CheckinScreen> {
           }
         }
       } else {
-        // (source == ImageSource.camera)
-        // 1. Gọi service để chụp 1 ảnh.
-        final image = await _service.pickImageFromCamera(
-          _selectedImages.length,
-          _maxImages,
+        // 🔥 MOCK CAMERA
+        final mockImage = await MockImageHelper.fromAsset(
+          'assets/images/apple.jpg',
         );
-        // 2. Nếu người dùng có chụp ảnh (`image != null`)
-        if (image != null) {
-          // 3. Cập nhật state: Thêm ảnh vừa chụp vào danh sách.
-          //    Sử dụng `add` để thêm một phần tử.
-          setState(() => _selectedImages.add(image));
-        }
+
+        setState(() {
+          _selectedImages.add(mockImage);
+        });
       }
     } catch (e) {
       _showSnackBar("Không thể chọn ảnh: $e", isError: true);
     }
   }
 
-  /// Gửi bài review (gọi service)
   Future<void> _handleSubmitReview() async {
-    // === BƯỚC 1: VALIDATION (KIỂM TRA TÍNH HỢP LỆ) ===
-    // Kiểm tra dữ liệu đầu vào. Nếu không hợp lệ -> hiển thị SnackBar và `return` (dừng hàm).
-    // `trim()`: Xóa khoảng trắng ở đầu và cuối chuỗi trước khi kiểm tra.
-
+    //1
+    if (_selectedImages.isEmpty) {
+      //2
+      _showSnackBar('Vui lòng thêm ít nhất một ảnh.'); //3
+      return;
+    }
+    if (_selectedImages.length > 10) {
+      //4
+      _showSnackBar('Vui lòng thêm tối đa 10 ảnh.'); //5
+      return;
+    }
     if (_titleController.text.trim().isEmpty) {
-      _showSnackBar('Vui lòng nhập Tiêu đề.');
+      //6
+      _showSnackBar('Vui lòng nhập Tiêu đề.'); //7
       return;
     }
     if (_commentController.text.trim().isEmpty) {
-      _showSnackBar('Vui lòng nhập Nội dung.');
+      //8
+      _showSnackBar('Vui lòng nhập Nội dung.'); //9
       return;
     }
-    // Kiểm tra xem `_selectedPlaceDoc` đã được gán (khác null) hay chưa.
     if (_selectedPlaceDoc == null) {
-      _showSnackBar('Vui lòng chọn địa điểm.');
+      //10
+      _showSnackBar('Vui lòng chọn địa điểm.'); //11
       return;
     }
-    if (_selectedImages.isEmpty) {
-      _showSnackBar('Vui lòng thêm ít nhất một ảnh.');
-      return;
-    }
-
-    // Ngăn người dùng bấm nút "Đăng bài" nhiều lần trong khi đang xử lý.
-    if (_isSaving) return;
-
-    // === BƯỚC 2: BẮT ĐẦU QUÁ TRÌNH LƯU ===
-
-    // 1. Cập nhật state `_isSaving = true`.
-    //    -> UI sẽ build lại, hiển thị `CircularProgressIndicator` trên nút.
-    setState(() => _isSaving = true);
-    _showSnackBar('Đang xử lý...'); // Thông báo cho người dùng biết
-
+    if (_isSaving) return; //12
+    setState(() => _isSaving = true); //13
+    _showSnackBar('Đang xử lý...'); //14
     try {
-      // === BƯỚC 3: GỌI SERVICE ===
-      // `await` cho đến khi service hoàn thành việc:
-      // 1. Upload ảnh lên Cloudinary.
-      // 2. Ghi dữ liệu review vào Firestore.
-      // 3. Cập nhật 'reviewCount' cho 'places'.
-      // 4. (Chạy ngầm) Cập nhật 'visitedProverbs' cho 'users'.
+      //15
       await _service.submitReview(
-        // Lấy ID người dùng từ `widget`.
+        //16
         userId: widget.currentUserId,
-        // Dùng `!` vì đã kiểm tra `!= null` ở BƯỚC 1.
         selectedPlaceDoc: _selectedPlaceDoc!,
-        // Lấy text đã trim (làm sạch) từ controller.
         title: _titleController.text.trim(),
         comment: _commentController.text.trim(),
-        hashtags: _hashtags, // Truyền danh sách hashtag
-        selectedImages: _selectedImages, // Truyền danh sách ảnh (XFile)
+        hashtags: _hashtags,
+        selectedImages: _selectedImages,
       );
-
-      // === BƯỚC 4: XỬ LÝ KHI THÀNH CÔNG ===
-      _showSnackBar('Đăng bài check-in thành công!');
-
-      // Kiểm tra `mounted` trước khi điều hướng (rất quan trọng sau `await`).
+      _showSnackBar('Đăng bài check-in thành công!'); //17
       if (mounted) {
-        // Đóng màn hình CheckinScreen và quay lại màn hình trước đó.
-        Navigator.pop(context);
+        //18
+        Navigator.pop(context); //19
       }
     } catch (e) {
-      // === BƯỚC 5: XỬ LÝ KHI THẤT BẠI ===
-      _showSnackBar('Lỗi khi đăng bài: $e', isError: true);
+      //20
+      _showSnackBar('Lỗi khi đăng bài: $e', isError: true); //21
     } finally {
-      // === BƯỚC 6: DỌN DẸP (LUÔN CHẠY) ===
-      // Dù thành công hay thất bại, cũng phải set `_isSaving = false`
-      // để người dùng có thể thử lại (nếu lỗi) hoặc nút trở về bình thường.
-      if (mounted) setState(() => _isSaving = false);
+      //22
+      if (mounted) setState(() => _isSaving = false); //23
     }
   }
 
@@ -347,6 +327,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
                 .stretch, // Các nút bấm kéo dài hết chiều ngang
             children: [
               OutlinedButton.icon(
+                key: const Key('btn_pick_gallery'),
                 icon: const Icon(Icons.photo_library_outlined),
                 // Khi bấm, gọi `_handlePickImage` với nguồn là `gallery`.
                 onPressed: () => _handlePickImage(ImageSource.gallery),
@@ -354,6 +335,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
               ),
               const SizedBox(height: 10),
               OutlinedButton.icon(
+                key: const Key('btn_pick_camera'),
                 icon: const Icon(Icons.camera_alt_outlined),
                 // Khi bấm, gọi `_handlePickImage` với nguồn là `camera`.
                 onPressed: () => _handlePickImage(ImageSource.camera),
@@ -465,6 +447,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
         centerTitle: true,
         leading: IconButton(
           // Nút back bên trái
+          key: const Key('btn_back_checkin'), // Thêm key để test
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
@@ -515,6 +498,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
 
               // 3. Place Section
               PlaceSection(
+                key: const Key('place_section'),
                 selectedPlaceDoc: _selectedPlaceDoc, // Truyền địa điểm đã chọn
                 isLoadingPlace: _isLoadingPlace, // Truyền trạng thái loading
                 onShowMiniMap: _showMiniMapPicker, // Truyền hàm mở map
@@ -555,6 +539,7 @@ class _CheckinScreenState extends State<CheckinScreen> {
                   // **Logic hiển thị loading:**
                   // `onPressed` được set là `null` nếu `_isSaving` là `true`.
                   // Điều này sẽ tự động vô hiệu hóa (disable) nút.
+                  key: const Key('btn_submit_post'), // Thêm key để test
                   onPressed: _isSaving ? null : _handleSubmitReview,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: kAppbarColor,
